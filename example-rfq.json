@@ -1,0 +1,25 @@
+{
+  "protocol_version": "0.1.0",
+  "client_reference": "business-cards-demo-001",
+  "product": "business_cards",
+  "quantity": 500,
+  "size_mm": {
+    "width": 90,
+    "height": 55
+  },
+  "stock_gsm": 350,
+  "stock_finish": "silk",
+  "sides": 2,
+  "colour": "full_colour",
+  "finishing": "none",
+  "fulfilment": {
+    "method": "pickup"
+  },
+  "artwork": {
+    "status": "not_supplied",
+    "media_type": "application/pdf",
+    "pages": 2,
+    "bleed_mm": 3,
+    "colour_space": "CMYK"
+  }
+}
