@@ -3,30 +3,127 @@
   "$id": "https://agentorder.org/schemas/0.2/schema.json",
   "title": "AgentOrder Print Protocol v0.2 messages",
   "oneOf": [
-    {"$ref": "#/$defs/rfq"},
-    {"$ref": "#/$defs/quote"},
-    {"$ref": "#/$defs/status"},
-    {"$ref": "#/$defs/error"},
-    {"$ref": "#/$defs/capability_config"}
+    {
+      "$ref": "#/$defs/rfq"
+    },
+    {
+      "$ref": "#/$defs/quote"
+    },
+    {
+      "$ref": "#/$defs/status"
+    },
+    {
+      "$ref": "#/$defs/error"
+    },
+    {
+      "$ref": "#/$defs/capability_config"
+    }
   ],
   "$defs": {
     "capability_config": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["business_cards"],
+      "required": [
+        "business_cards"
+      ],
       "properties": {
         "business_cards": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["currency", "finished_size_presets", "sides", "stock_gsm", "stock_finish", "quantity", "finishing"],
+          "required": [
+            "currency",
+            "finished_size_presets",
+            "sides",
+            "stock_gsm",
+            "stock_finish",
+            "quantity",
+            "finishing"
+          ],
           "properties": {
-            "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
-            "finished_size_presets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["us_3.5x2in", "uk_eu_85x55mm", "au_nz_90x55mm"]}},
-            "sides": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": [1, 2]}},
-            "stock_gsm": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 150, "maximum": 600}},
-            "stock_finish": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["uncoated", "silk", "matte", "gloss"]}},
-            "quantity": {"type": "object", "additionalProperties": false, "required": ["minimum", "maximum", "increment"], "properties": {"minimum": {"type": "integer", "minimum": 1}, "maximum": {"type": "integer", "minimum": 1}, "increment": {"type": "integer", "minimum": 1}}},
-            "finishing": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["none", "matte_laminate_both_sides"]}}
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "finished_size_presets": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "us_3.5x2in",
+                  "uk_eu_85x55mm",
+                  "au_nz_90x55mm"
+                ]
+              }
+            },
+            "sides": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  1,
+                  2
+                ]
+              }
+            },
+            "stock_gsm": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 150,
+                "maximum": 600
+              }
+            },
+            "stock_finish": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "uncoated",
+                  "silk",
+                  "matte",
+                  "gloss"
+                ]
+              }
+            },
+            "quantity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "minimum",
+                "maximum",
+                "increment"
+              ],
+              "properties": {
+                "minimum": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "maximum": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "increment": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "finishing": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "none",
+                  "matte_laminate_both_sides"
+                ]
+              }
+            }
           }
         }
       }
@@ -34,75 +131,376 @@
     "print_job": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["quantity", "finished_size", "sides", "colour", "stock", "finishing", "artwork"],
+      "required": [
+        "quantity",
+        "finished_size",
+        "sides",
+        "colour",
+        "stock",
+        "finishing",
+        "artwork"
+      ],
       "properties": {
-        "quantity": {"type": "integer", "minimum": 1, "maximum": 100000},
-        "finished_size": {"enum": ["us_3.5x2in", "uk_eu_85x55mm", "au_nz_90x55mm"]},
-        "sides": {"enum": [1, 2]},
-        "colour": {"enum": ["CMYK", "black"]},
-        "stock": {"type": "object", "additionalProperties": false, "required": ["weight_gsm", "finish"], "properties": {"weight_gsm": {"type": "integer", "minimum": 150, "maximum": 600}, "finish": {"enum": ["uncoated", "silk", "matte", "gloss"]}}},
-        "finishing": {"enum": ["none", "matte_laminate_both_sides"]},
-        "artwork": {"type": "object", "additionalProperties": false, "required": ["url"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "finished_size": {
+          "enum": [
+            "us_3.5x2in",
+            "uk_eu_85x55mm",
+            "au_nz_90x55mm"
+          ]
+        },
+        "sides": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "colour": {
+          "enum": [
+            "CMYK",
+            "black"
+          ]
+        },
+        "stock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "weight_gsm",
+            "finish"
+          ],
+          "properties": {
+            "weight_gsm": {
+              "type": "integer",
+              "minimum": 150,
+              "maximum": 600
+            },
+            "finish": {
+              "enum": [
+                "uncoated",
+                "silk",
+                "matte",
+                "gloss"
+              ]
+            }
+          }
+        },
+        "finishing": {
+          "enum": [
+            "none",
+            "matte_laminate_both_sides"
+          ]
+        },
+        "artwork": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
       }
     },
     "rfq": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["agentorder_version", "rfq_id", "buyer", "fulfillment_destination", "print_job"],
+      "required": [
+        "agentorder_version",
+        "rfq_id",
+        "buyer",
+        "fulfillment_destination",
+        "print_job"
+      ],
       "properties": {
-        "agentorder_version": {"const": "0.2.0"},
-        "rfq_id": {"type": "string", "minLength": 1},
-        "buyer": {"$ref": "https://ucp.dev/schemas/shopping/types/buyer.json"},
-        "fulfillment_destination": {"$ref": "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json"},
-        "print_job": {"$ref": "#/$defs/print_job"}
+        "agentorder_version": {
+          "const": "0.2.0"
+        },
+        "rfq_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buyer": {
+          "$ref": "https://ucp.dev/schemas/shopping/types/buyer.json"
+        },
+        "fulfillment_destination": {
+          "$ref": "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json"
+        },
+        "print_job": {
+          "$ref": "#/$defs/print_job"
+        }
       }
     },
     "decline": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["reason"],
-      "properties": {"reason": {"enum": ["price", "lead_time", "specification", "artwork", "other"]}}
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "price",
+            "lead_time",
+            "specification",
+            "artwork",
+            "other"
+          ]
+        }
+      }
     },
     "quote": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["agentorder_version", "quote_id", "rfq_id", "status", "print_job"],
+      "required": [
+        "agentorder_version",
+        "quote_id",
+        "rfq_id",
+        "status",
+        "print_job"
+      ],
       "properties": {
-        "agentorder_version": {"const": "0.2.0"},
-        "quote_id": {"type": "string", "minLength": 1},
-        "rfq_id": {"type": "string", "minLength": 1},
-        "status": {"enum": ["quoted", "declined"]},
-        "expires_at": {"type": "string", "format": "date-time"},
-        "print_job": {"$ref": "#/$defs/print_job"},
-        "lead_time": {"type": "object", "additionalProperties": false, "required": ["business_days", "starts_after"], "properties": {"business_days": {"type": "integer", "minimum": 1}, "starts_after": {"const": "artwork_accepted"}}},
-        "review": {"type": "object", "additionalProperties": false, "required": ["url"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://"}}},
-        "quote_line_item": {"type": "object", "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json"},
-        "decline": {"$ref": "#/$defs/decline"},
-        "declined_at": {"type": "string", "format": "date-time"}
+        "agentorder_version": {
+          "const": "0.2.0"
+        },
+        "quote_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rfq_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "quoted",
+            "declined"
+          ]
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "print_job": {
+          "$ref": "#/$defs/print_job"
+        },
+        "lead_time": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "business_days",
+            "starts_after"
+          ],
+          "properties": {
+            "business_days": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "starts_after": {
+              "const": "artwork_accepted"
+            }
+          }
+        },
+        "review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            }
+          }
+        },
+        "quote_line_item": {
+          "allOf": [
+            {
+              "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json"
+            },
+            {
+              "properties": {
+                "quantity": {
+                  "const": 1
+                },
+                "totals": {
+                  "contains": {
+                    "type": "object",
+                    "required": [
+                      "type"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "total"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "decline": {
+          "$ref": "#/$defs/decline"
+        },
+        "declined_at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
       "allOf": [
-        {"if": {"properties": {"status": {"const": "quoted"}}, "required": ["status"]}, "then": {"required": ["expires_at", "lead_time", "review", "quote_line_item"]}},
-        {"if": {"properties": {"status": {"const": "declined"}}, "required": ["status"]}, "then": {"required": ["decline", "declined_at"]}}
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "quoted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "expires_at",
+              "lead_time",
+              "review",
+              "quote_line_item"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "declined"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "decline",
+              "declined_at"
+            ],
+            "properties": {
+              "quote_line_item": false,
+              "expires_at": false,
+              "lead_time": false,
+              "review": false
+            }
+          }
+        }
       ]
     },
     "status": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["agentorder_version", "quote_id", "proof_status", "production_status"],
+      "required": [
+        "agentorder_version",
+        "quote_id",
+        "proof_status",
+        "production_status"
+      ],
       "properties": {
-        "agentorder_version": {"const": "0.2.0"},
-        "quote_id": {"type": "string", "minLength": 1},
-        "proof_status": {"enum": ["not_required", "pending", "approved", "changes_requested"]},
-        "production_status": {"enum": ["awaiting_artwork", "artwork_review", "in_production", "dispatched", "completed", "on_hold"]}
+        "agentorder_version": {
+          "const": "0.2.0"
+        },
+        "quote_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_status": {
+          "enum": [
+            "not_required",
+            "pending",
+            "approved",
+            "changes_requested"
+          ]
+        },
+        "production_status": {
+          "enum": [
+            "awaiting_artwork",
+            "artwork_review",
+            "in_production",
+            "dispatched",
+            "completed",
+            "on_hold"
+          ]
+        }
       }
     },
     "error": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["agentorder_version", "error"],
+      "required": [
+        "agentorder_version",
+        "error"
+      ],
       "properties": {
-        "agentorder_version": {"const": "0.2.0"},
-        "error": {"type": "object", "additionalProperties": false, "required": ["code", "message", "details"], "properties": {"code": {"enum": ["invalid_request", "unsupported_print_job", "quote_expired", "idempotency_conflict", "invalid_signature", "invalid_csrf", "mandate_required"]}, "message": {"type": "string", "minLength": 1}, "details": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["code"], "properties": {"field": {"type": "string"}, "code": {"type": "string"}}}}}}
+        "agentorder_version": {
+          "const": "0.2.0"
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message",
+            "details"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "invalid_request",
+                "unsupported_print_job",
+                "quote_expired",
+                "idempotency_conflict",
+                "invalid_signature",
+                "invalid_csrf",
+                "mandate_required"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

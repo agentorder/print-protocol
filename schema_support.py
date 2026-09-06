@@ -6,6 +6,8 @@ from pathlib import Path
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
+from agentorder_title import render_title
+
 ROOT = Path(__file__).resolve().parent
 LOCK = json.loads((ROOT / "ucp.lock.json").read_text(encoding="utf-8"))
 VENDOR_ROOT = ROOT / "vendor" / "ucp" / LOCK["commit"] / "source" / "schemas"
@@ -38,3 +40,20 @@ def config_allows(print_job: dict, config: dict) -> bool:
 def require_config_allowed(print_job: dict, config: dict) -> None:
     if not config_allows(print_job, config):
         raise ValueError("print_job is outside the printer capability config")
+
+
+def validate_quote(quote: dict) -> None:
+    """Enforce AgentOrder invariants after JSON Schema validation."""
+    if quote.get("status") != "quoted":
+        return
+    line = quote["quote_line_item"]
+    quote_id = quote["quote_id"]
+    if line["item"]["id"] != "quote:" + quote_id:
+        raise ValueError("quote_line_item.item.id must be quote:<quote_id>")
+    if line["id"] != "quote-line:" + quote_id:
+        raise ValueError("quote_line_item.id must be quote-line:<quote_id>")
+    price = line["item"]["price"]
+    if any(total["amount"] != price for total in line["totals"]):
+        raise ValueError("every quote_line_item total must equal item.price")
+    if line["item"]["title"] != render_title(quote["print_job"]):
+        raise ValueError("quote_line_item.item.title must match render_title(print_job)")

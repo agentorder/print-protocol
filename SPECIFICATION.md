@@ -278,6 +278,12 @@ Every AgentOrder message has `agentorder_version: "0.2.0"`. UCP and AP2 messages
         ]
       },
       "then": {
+        "properties": {
+          "expires_at": false,
+          "lead_time": false,
+          "quote_line_item": false,
+          "review": false
+        },
         "required": [
           "decline",
           "declined_at"
@@ -325,8 +331,31 @@ Every AgentOrder message has `agentorder_version: "0.2.0"`. UCP and AP2 messages
       "type": "string"
     },
     "quote_line_item": {
-      "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json",
-      "type": "object"
+      "allOf": [
+        {
+          "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json"
+        },
+        {
+          "properties": {
+            "quantity": {
+              "const": 1
+            },
+            "totals": {
+              "contains": {
+                "properties": {
+                  "type": {
+                    "const": "total"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
     },
     "review": {
       "additionalProperties": false,

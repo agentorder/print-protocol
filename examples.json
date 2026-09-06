@@ -3,34 +3,72 @@
     "ucp": {
       "version": "2026-06-15",
       "services": {
-        "dev.ucp.shopping": [{
-          "version": "2026-06-15",
-          "spec": "https://ucp.dev/specification/overview/",
-          "transport": "rest",
-          "schema": "https://ucp.dev/services/shopping/rest.openapi.json",
-          "endpoint": "https://printer.example.invalid/ucp/v1"
-        }]
+        "dev.ucp.shopping": [
+          {
+            "version": "2026-06-15",
+            "spec": "https://ucp.dev/specification/overview/",
+            "transport": "rest",
+            "schema": "https://ucp.dev/services/shopping/rest.openapi.json",
+            "endpoint": "https://printer.example.invalid/ucp/v1"
+          }
+        ]
       },
       "capabilities": {
-        "dev.ucp.shopping.checkout": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/shopping/checkout.json"}],
-        "dev.ucp.common.payment.ap2_mandate": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/common/payment_ap2_mandate.json", "extends": "dev.ucp.shopping.checkout"}],
-        "org.agentorder.shopping.print_quote": [{
-          "version": "2026-09-06",
-          "spec": "https://agentorder.org/specification/0.2",
-          "schema": "https://agentorder.org/schemas/0.2/schema.json",
-          "extends": ["dev.ucp.shopping.cart", "dev.ucp.shopping.checkout"],
-          "config": {
-            "business_cards": {
-              "currency": "NZD",
-              "finished_size_presets": ["au_nz_90x55mm"],
-              "sides": [1, 2],
-              "stock_gsm": [300, 350],
-              "stock_finish": ["silk", "matte"],
-              "quantity": {"minimum": 100, "maximum": 10000, "increment": 50},
-              "finishing": ["none", "matte_laminate_both_sides"]
+        "dev.ucp.shopping.checkout": [
+          {
+            "version": "2026-06-15",
+            "spec": "https://ucp.dev/specification/",
+            "schema": "https://ucp.dev/schemas/shopping/checkout.json"
+          }
+        ],
+        "dev.ucp.common.payment.ap2_mandate": [
+          {
+            "version": "2026-06-15",
+            "spec": "https://ucp.dev/specification/",
+            "schema": "https://ucp.dev/schemas/common/payment_ap2_mandate.json",
+            "extends": "dev.ucp.shopping.checkout"
+          }
+        ],
+        "org.agentorder.shopping.print_quote": [
+          {
+            "version": "2026-09-06",
+            "spec": "https://agentorder.org/specification/0.2",
+            "schema": "https://agentorder.org/schemas/0.2/schema.json",
+            "extends": [
+              "dev.ucp.shopping.cart",
+              "dev.ucp.shopping.checkout"
+            ],
+            "config": {
+              "business_cards": {
+                "currency": "NZD",
+                "finished_size_presets": [
+                  "au_nz_90x55mm"
+                ],
+                "sides": [
+                  1,
+                  2
+                ],
+                "stock_gsm": [
+                  300,
+                  350
+                ],
+                "stock_finish": [
+                  "silk",
+                  "matte"
+                ],
+                "quantity": {
+                  "minimum": 100,
+                  "maximum": 10000,
+                  "increment": 50
+                },
+                "finishing": [
+                  "none",
+                  "matte_laminate_both_sides"
+                ]
+              }
             }
           }
-        }]
+        ]
       },
       "payment_handlers": {}
     },
@@ -39,11 +77,42 @@
   "platform_profile": {
     "ucp": {
       "version": "2026-06-15",
-      "services": {"dev.ucp.shopping": [{"version": "2026-06-15", "transport": "mcp", "schema": "https://agentorder.org/openrpc/reference-agent.json"}]},
+      "services": {
+        "dev.ucp.shopping": [
+          {
+            "version": "2026-06-15",
+            "transport": "mcp",
+            "schema": "https://agentorder.org/openrpc/reference-agent.json"
+          }
+        ]
+      },
       "capabilities": {
-        "dev.ucp.shopping.checkout": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/shopping/checkout.json"}],
-        "dev.ucp.common.payment.ap2_mandate": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/common/payment_ap2_mandate.json", "extends": "dev.ucp.shopping.checkout"}],
-        "org.agentorder.shopping.print_quote": [{"version": "2026-09-06", "spec": "https://agentorder.org/specification/0.2", "schema": "https://agentorder.org/schemas/0.2/schema.json", "extends": ["dev.ucp.shopping.cart", "dev.ucp.shopping.checkout"]}]
+        "dev.ucp.shopping.checkout": [
+          {
+            "version": "2026-06-15",
+            "spec": "https://ucp.dev/specification/",
+            "schema": "https://ucp.dev/schemas/shopping/checkout.json"
+          }
+        ],
+        "dev.ucp.common.payment.ap2_mandate": [
+          {
+            "version": "2026-06-15",
+            "spec": "https://ucp.dev/specification/",
+            "schema": "https://ucp.dev/schemas/common/payment_ap2_mandate.json",
+            "extends": "dev.ucp.shopping.checkout"
+          }
+        ],
+        "org.agentorder.shopping.print_quote": [
+          {
+            "version": "2026-09-06",
+            "spec": "https://agentorder.org/specification/0.2",
+            "schema": "https://agentorder.org/schemas/0.2/schema.json",
+            "extends": [
+              "dev.ucp.shopping.cart",
+              "dev.ucp.shopping.checkout"
+            ]
+          }
+        ]
       },
       "payment_handlers": {}
     },
@@ -52,20 +121,61 @@
   "capability_config": {
     "business_cards": {
       "currency": "NZD",
-      "finished_size_presets": ["au_nz_90x55mm"],
-      "sides": [1, 2],
-      "stock_gsm": [300, 350],
-      "stock_finish": ["silk", "matte"],
-      "quantity": {"minimum": 100, "maximum": 10000, "increment": 50},
-      "finishing": ["none", "matte_laminate_both_sides"]
+      "finished_size_presets": [
+        "au_nz_90x55mm"
+      ],
+      "sides": [
+        1,
+        2
+      ],
+      "stock_gsm": [
+        300,
+        350
+      ],
+      "stock_finish": [
+        "silk",
+        "matte"
+      ],
+      "quantity": {
+        "minimum": 100,
+        "maximum": 10000,
+        "increment": 50
+      },
+      "finishing": [
+        "none",
+        "matte_laminate_both_sides"
+      ]
     }
   },
   "rfq": {
     "agentorder_version": "0.2.0",
     "rfq_id": "rfq-example-nz-001",
-    "buyer": {"first_name": "Example", "last_name": "Buyer", "email": "buyer@example.invalid"},
-    "fulfillment_destination": {"type": "shipping_address", "id": "destination-example-001", "address_locality": "Wellington", "address_country": "NZ", "postal_code": "6011"},
-    "print_job": {"quantity": 500, "finished_size": "au_nz_90x55mm", "sides": 2, "colour": "CMYK", "stock": {"weight_gsm": 350, "finish": "silk"}, "finishing": "none", "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}}
+    "buyer": {
+      "first_name": "Example",
+      "last_name": "Buyer",
+      "email": "buyer@example.invalid"
+    },
+    "fulfillment_destination": {
+      "type": "shipping_address",
+      "id": "destination-example-001",
+      "address_locality": "Wellington",
+      "address_country": "NZ",
+      "postal_code": "6011"
+    },
+    "print_job": {
+      "quantity": 500,
+      "finished_size": "au_nz_90x55mm",
+      "sides": 2,
+      "colour": "CMYK",
+      "stock": {
+        "weight_gsm": 350,
+        "finish": "silk"
+      },
+      "finishing": "none",
+      "artwork": {
+        "url": "https://files.example.invalid/artwork/example-001.pdf"
+      }
+    }
   },
   "quoted_quote": {
     "agentorder_version": "0.2.0",
@@ -73,14 +183,45 @@
     "rfq_id": "rfq-example-nz-001",
     "status": "quoted",
     "expires_at": "2026-10-01T00:00:00Z",
-    "print_job": {"quantity": 500, "finished_size": "au_nz_90x55mm", "sides": 2, "colour": "CMYK", "stock": {"weight_gsm": 350, "finish": "silk"}, "finishing": "none", "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}},
-    "lead_time": {"business_days": 3, "starts_after": "artwork_accepted"},
-    "review": {"url": "https://printer.example.invalid/review/quote-example-nz-001"},
+    "print_job": {
+      "quantity": 500,
+      "finished_size": "au_nz_90x55mm",
+      "sides": 2,
+      "colour": "CMYK",
+      "stock": {
+        "weight_gsm": 350,
+        "finish": "silk"
+      },
+      "finishing": "none",
+      "artwork": {
+        "url": "https://files.example.invalid/artwork/example-001.pdf"
+      }
+    },
+    "lead_time": {
+      "business_days": 3,
+      "starts_after": "artwork_accepted"
+    },
+    "review": {
+      "url": "https://printer.example.invalid/review/quote-example-nz-001"
+    },
     "quote_line_item": {
-      "id": "quote-example-nz-001",
-      "item": {"id": "quote-example-nz-001", "title": "500 business cards — AU/NZ 90 × 55 mm, 2-sided, 350 gsm silk", "price": 10900},
+      "id": "quote-line:quote-example-nz-001",
+      "item": {
+        "id": "quote:quote-example-nz-001",
+        "title": "500 business cards \u2014 AU/NZ 90 \u00d7 55 mm, 2-sided, 350 gsm silk",
+        "price": 10900
+      },
       "quantity": 1,
-      "totals": [{"type": "subtotal", "amount": 10900}, {"type": "total", "amount": 10900}]
+      "totals": [
+        {
+          "type": "subtotal",
+          "amount": 10900
+        },
+        {
+          "type": "total",
+          "amount": 10900
+        }
+      ]
     }
   },
   "declined_quote": {
@@ -88,10 +229,37 @@
     "quote_id": "quote-example-nz-002",
     "rfq_id": "rfq-example-nz-001",
     "status": "declined",
-    "print_job": {"quantity": 500, "finished_size": "au_nz_90x55mm", "sides": 2, "colour": "CMYK", "stock": {"weight_gsm": 350, "finish": "silk"}, "finishing": "none", "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}},
-    "decline": {"reason": "lead_time"},
+    "print_job": {
+      "quantity": 500,
+      "finished_size": "au_nz_90x55mm",
+      "sides": 2,
+      "colour": "CMYK",
+      "stock": {
+        "weight_gsm": 350,
+        "finish": "silk"
+      },
+      "finishing": "none",
+      "artwork": {
+        "url": "https://files.example.invalid/artwork/example-001.pdf"
+      }
+    },
+    "decline": {
+      "reason": "lead_time"
+    },
     "declined_at": "2026-09-30T00:00:00Z"
   },
-  "status": {"agentorder_version": "0.2.0", "quote_id": "quote-example-nz-001", "proof_status": "not_required", "production_status": "awaiting_artwork"},
-  "error": {"agentorder_version": "0.2.0", "error": {"code": "quote_expired", "message": "This quote has expired; request a fresh quote.", "details": []}}
+  "status": {
+    "agentorder_version": "0.2.0",
+    "quote_id": "quote-example-nz-001",
+    "proof_status": "not_required",
+    "production_status": "awaiting_artwork"
+  },
+  "error": {
+    "agentorder_version": "0.2.0",
+    "error": {
+      "code": "quote_expired",
+      "message": "This quote has expired; request a fresh quote.",
+      "details": []
+    }
+  }
 }
