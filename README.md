@@ -2,6 +2,8 @@
 
 **An open protocol for agentic print ordering.**
 
+This repository is the open protocol and a single-printer reference. The hosted multi-printer service lives in a separate private repository.
+
 Draft **0.1.0** connects a printer's capabilities to a structured request for quote, a customer review step, and an order acknowledgment. The first reference product is double-sided business cards.
 
 **This is a working local demonstration, not a live print service.** All prices are synthetic. It does not take payments, inspect artwork, reserve production capacity, or send work to a printer.
