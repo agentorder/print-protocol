@@ -1,4 +1,5 @@
 """Offline resolver for UCP schemas pinned in ucp.lock.json."""
+
 from __future__ import annotations
 
 import json

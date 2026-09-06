@@ -1,4 +1,5 @@
 """Reference-agent quote intake validation shared by MCP/A2A transports later."""
+
 from __future__ import annotations
 
 import json
