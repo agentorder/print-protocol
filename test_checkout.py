@@ -22,9 +22,12 @@ from server import (
     build_checkout_jwt,
     checkout_hash,
     make_server,
+    mint_trusted_surface_mandates,
+    sign_trusted_surface_jws,
     validate_closed_mandate_bindings,
     verify_checkout_jwt,
     verify_merchant_authorization,
+    verify_trusted_surface_jws,
 )
 from jsonschema import Draft202012Validator
 
@@ -92,6 +95,9 @@ class CheckoutTest(unittest.TestCase):
         self.merchant = ec.generate_private_key(ec.SECP256R1())
         self.merchant_jwk = _jwk(self.merchant.public_key().public_numbers())
         self.merchant_jwk["kid"] = "printer-a"
+        self.trusted_surface = ec.generate_private_key(ec.SECP256R1())
+        self.trusted_surface_jwk = _jwk(self.trusted_surface.public_key().public_numbers())
+        self.trusted_surface_jwk["kid"] = "trusted-surface"
         agent = ec.generate_private_key(ec.SECP256R1())
         self.agent_jwk = _jwk(agent.public_key().public_numbers())
         self.agent_jwk["kid"] = "ka"
@@ -203,8 +209,37 @@ class CheckoutTest(unittest.TestCase):
         token = build_checkout_jwt(checkout)
         header, payload, signature = token.split(".")
         tampered_payload = b64(jcs_canonicalize({"not": "the signed checkout"}))
-        self.assertFalse(verify_checkout_jwt(header + "." + tampered_payload + "." + signature, self.merchant_jwk))
+        self.assertFalse(
+            verify_checkout_jwt(
+                header + "." + tampered_payload + "." + signature, self.merchant_jwk
+            )
+        )
         self.assertFalse(verify_checkout_jwt(token, self.agent_jwk))
+
+    def test_fixture_trusted_surface_mints_verifiable_closed_mandates(self):
+        checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
+        mandates = mint_trusted_surface_mandates(checkout, self.trusted_surface)
+        checkout_claims = verify_trusted_surface_jws(
+            mandates["checkout_mandate"], self.trusted_surface_jwk
+        )
+        payment_claims = verify_trusted_surface_jws(
+            mandates["payment_mandate"], self.trusted_surface_jwk
+        )
+        self.assertEqual(checkout_claims["vct"], "mandate.checkout.1")
+        self.assertEqual(payment_claims["vct"], "mandate.payment.1")
+        self.assertEqual(payment_claims["transaction_id"], checkout_claims["checkout_hash"])
+
+    def test_trusted_surface_jws_rejects_wrong_key_and_tampered_claim(self):
+        claims = {"vct": "mandate.checkout.1", "checkout_jwt": "fixture", "checkout_hash": "hash"}
+        token = sign_trusted_surface_jws(claims, self.trusted_surface)
+        self.assertIsNone(verify_trusted_surface_jws(token, self.agent_jwk))
+        header, payload, signature = token.split(".")
+        tampered = b64(jcs_canonicalize({**claims, "checkout_hash": "tampered"}))
+        self.assertIsNone(
+            verify_trusted_surface_jws(
+                header + "." + tampered + "." + signature, self.trusted_surface_jwk
+            )
+        )
 
     def test_checkout_from_expired_quote_is_refused(self):
         self._seed_quote("q2", "r2", "2020-01-01T00:00:00Z")

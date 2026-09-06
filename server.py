@@ -83,7 +83,10 @@ def verify_checkout_jwt(token, merchant_jwk):
         ):
             return False
         decoded_checkout = json.loads(b64d(payload))
-        if not isinstance(decoded_checkout, dict) or b64(checkout_payload(decoded_checkout)) != payload:
+        if (
+            not isinstance(decoded_checkout, dict)
+            or b64(checkout_payload(decoded_checkout)) != payload
+        ):
             return False
         raw_signature = b64d(signature)
         if len(raw_signature) != 64:
@@ -103,6 +106,79 @@ def verify_checkout_jwt(token, merchant_jwk):
         return True
     except (AttributeError, InvalidSignature, KeyError, ValueError, json.JSONDecodeError):
         return False
+
+
+def sign_trusted_surface_jws(claims, trusted_surface_key, kid="trusted-surface"):
+    """Sign fully disclosed fixture mandate claims as a compact ES256 JWS."""
+    header = b64(
+        json.dumps({"alg": "ES256", "kid": kid, "typ": "JWT"}, separators=(",", ":")).encode()
+    )
+    payload = b64(jcs_canonicalize(claims))
+    der = trusted_surface_key.sign((header + "." + payload).encode(), ec.ECDSA(hashes.SHA256()))
+    r, s = decode_dss_signature(der)
+    return header + "." + payload + "." + b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
+
+
+def verify_trusted_surface_jws(token, ts_jwk):
+    """Return verified, fully disclosed JWS claims, or None on verification failure."""
+    try:
+        header, payload, signature = token.split(".")
+        decoded_header = json.loads(b64d(header))
+        claims = json.loads(b64d(payload))
+        if (
+            not isinstance(decoded_header, dict)
+            or decoded_header.get("alg") != "ES256"
+            or not isinstance(claims, dict)
+            or b64(jcs_canonicalize(claims)) != payload
+            or (ts_jwk.get("kid") and decoded_header.get("kid") != ts_jwk["kid"])
+        ):
+            return None
+        raw_signature = b64d(signature)
+        if len(raw_signature) != 64:
+            return None
+        public = ec.EllipticCurvePublicNumbers(
+            int.from_bytes(b64d(ts_jwk["x"]), "big"),
+            int.from_bytes(b64d(ts_jwk["y"]), "big"),
+            ec.SECP256R1(),
+        ).public_key()
+        public.verify(
+            encode_dss_signature(
+                int.from_bytes(raw_signature[:32], "big"), int.from_bytes(raw_signature[32:], "big")
+            ),
+            (header + "." + payload).encode(),
+            ec.ECDSA(hashes.SHA256()),
+        )
+        return claims
+    except (
+        AttributeError,
+        InvalidSignature,
+        KeyError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ):
+        return None
+
+
+def mint_trusted_surface_mandates(checkout, trusted_surface_key, kid="trusted-surface"):
+    """Mint fixture closed mandates for an already merchant-signed checkout."""
+    checkout_jwt = build_checkout_jwt(checkout)
+    checkout_identifier = checkout_hash(checkout_jwt)
+    total = next(total for total in checkout["totals"] if total["type"] == "total")
+    checkout_mandate = {
+        "vct": "mandate.checkout.1",
+        "checkout_jwt": checkout_jwt,
+        "checkout_hash": checkout_identifier,
+    }
+    payment_mandate = {
+        "vct": "mandate.payment.1",
+        "transaction_id": checkout_identifier,
+        "payment_amount": {"amount": total["amount"], "currency": checkout["currency"]},
+    }
+    return {
+        "checkout_mandate": sign_trusted_surface_jws(checkout_mandate, trusted_surface_key, kid),
+        "payment_mandate": sign_trusted_surface_jws(payment_mandate, trusted_surface_key, kid),
+    }
 
 
 def validate_closed_mandate_bindings(checkout_mandate, payment_mandate, amount, currency):
@@ -128,7 +204,9 @@ def validate_closed_mandate_bindings(checkout_mandate, payment_mandate, amount, 
     ):
         raise Problem(422, "mandate_required", "Checkout Mandate hash does not match checkout_jwt.")
     transaction_id = payment_mandate.get("transaction_id")
-    if not isinstance(transaction_id, str) or not hmac.compare_digest(transaction_id, expected_hash):
+    if not isinstance(transaction_id, str) or not hmac.compare_digest(
+        transaction_id, expected_hash
+    ):
         raise Problem(422, "mandate_required", "Payment Mandate is not bound to checkout_jwt.")
     payment_amount = payment_mandate.get("payment_amount")
     if (

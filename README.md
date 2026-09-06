@@ -105,3 +105,11 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Use issues fo
 ## Reference-server boundary
 
 `server.py` is a loopback-only reference implementation using Python's standard-library `http.server`. The hosted AgentOrder.tech product will use a production web server and managed operational controls; it will not use this reference server.
+
+### AP2 fixture limitation
+
+The test trusted surface models closed AP2 Checkout and Payment Mandates as fully disclosed,
+compact ES256 JWSs. SD-JWT selective disclosure and key-binding JWT validation are out of scope
+for this reference fixture. The serialization relationship between UCP's detached merchant
+authorization and AP2's attached `checkout_jwt` is not yet independently verified; this fixture
+uses the same RFC 7515 signing input and must not be treated as an interoperability claim.
