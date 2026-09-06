@@ -4,11 +4,11 @@
 
 ## Decision
 
-Replace the single-printer v0.1 demo with a hosted-printer adapter. SQLite remains the local persistence layer. The adapter owns protocol translation, UCP discovery, request verification, quote state, mandate verification, and Stripe Connect orchestration; the printer configures capabilities and pricing in a UI later.
+Replace the single-printer v0.1 demo with a **single-tenant reference server**. It demonstrates protocol discovery, request verification, and quote state for one fixture printer. Multi-tenant hosting, tenant provisioning, operator UI, pricing, sessions, and Stripe Connect belong in the private `agentorder/platform` repository.
 
 The first UCP platform is the AgentOrder reference agent, exposed through an MCP server and an A2A agent card. It advertises `org.agentorder.shopping.print_quote` version `2026-09-06`, so the extension is negotiated in the first pilot.
 
-## Hosted-printer provisioning
+## Hosted-printer provisioning (platform repository)
 
 1. Printer signs up at AgentOrder.tech, proves control of its domain or chooses an AgentOrder-hosted profile URL, and accepts the hosted-service authorization.
 2. Printer connects Stripe via Connect. Store only Stripe account identifiers and encrypted platform credentials; never store card data.
@@ -98,7 +98,7 @@ This follows the published UCP profile structure: service endpoint, versioned ca
 - `agent-card.json` describes the A2A handoff for quote discovery and review. The card contains no private routing, keys, or printer credentials.
 - The reference agent creates the final UCP Checkout before opening the trusted review. The trusted surface returns the signed closed AP2 Checkout and Payment Mandates plus payment credential. There is no separate AgentOrder approval record.
 
-## Manual quote UI — critical path
+## Manual quote UI — critical path (platform repository)
 
 Build this before the sandbox Stripe adapter. It proves the side printers actually need, while the fake payment adapter proves the rest of the transaction loop.
 
@@ -109,7 +109,7 @@ Build this before the sandbox Stripe adapter. It proves the side printers actual
 
 Pilot proof: a real printer receives a realistic RFQ, clicks through price + lead time + send, and the reference agent receives an interoperable quote. This succeeds before any Stripe sandbox charge exists.
 
-## Stripe Connect boundary
+## Stripe Connect boundary (platform repository)
 
 1. Server verifies the Checkout Mandate against the merchant-signed UCP Checkout and verifies its expiry, hash, audience, signature chain, and negotiated capabilities.
 2. Server verifies the Payment Mandate binding and payment credential scope according to AP2.
@@ -123,7 +123,7 @@ The Stripe API shape and payment method chosen for the pilot remain implementati
 
 1. Freeze the selected UCP snapshot and settle the AP2 capability identifier conflict.
 2. Replace canonical schema and fixtures; add schema/profile validation tests.
-3. Build SQLite tenant/configuration and UCP discovery.
+3. Build single-tenant fixture configuration and UCP discovery in this repository.
 4. Build the MCP server, platform profile, and A2A card; prove negotiated RFQ against one hosted-printer fixture.
 5. Build the manual quote UI and prove a printer operator can send a quote from the RFQ inbox; then request Stripe Connect sandbox onboarding.
 6. Build checkout and mandate-verification interfaces with deterministic AP2 test vectors.
