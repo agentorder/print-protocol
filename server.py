@@ -181,6 +181,66 @@ def mint_trusted_surface_mandates(checkout, trusted_surface_key, kid="trusted-su
     }
 
 
+def checkout_total(checkout):
+    """Extract the single charge amount and currency from a UCP checkout."""
+    try:
+        total = next(item for item in checkout["totals"] if item["type"] == "total")
+        amount = total["amount"]
+        currency = checkout["currency"]
+    except (KeyError, StopIteration, TypeError):
+        raise Problem(422, "mandate_scope_mismatch", "Charged checkout has no total.")
+    if isinstance(amount, bool) or not isinstance(amount, int) or not isinstance(currency, str):
+        raise Problem(422, "mandate_scope_mismatch", "Charged checkout has an invalid total.")
+    return amount, currency
+
+
+def verify_mandate_pair(checkout, mandates, merchant_jwk, trusted_surface_jwk):
+    """Verify every signature and immutable binding required to charge a checkout."""
+    try:
+        checkout_token = mandates["checkout_mandate"]
+        payment_token = mandates["payment_mandate"]
+    except (KeyError, TypeError):
+        raise Problem(422, "mandate_required", "Both closed AP2 mandates are required.")
+    checkout_mandate = verify_trusted_surface_jws(checkout_token, trusted_surface_jwk)
+    if checkout_mandate is None:
+        raise Problem(
+            422,
+            "mandate_invalid_signature",
+            "Checkout Mandate trusted-surface signature is invalid.",
+        )
+    payment_mandate = verify_trusted_surface_jws(payment_token, trusted_surface_jwk)
+    if payment_mandate is None:
+        raise Problem(
+            422,
+            "mandate_invalid_signature",
+            "Payment Mandate trusted-surface signature is invalid.",
+        )
+    if checkout_mandate.get("vct") != "mandate.checkout.1":
+        raise Problem(422, "mandate_required", "A closed Checkout Mandate is required.")
+    if payment_mandate.get("vct") != "mandate.payment.1":
+        raise Problem(422, "mandate_required", "A closed Payment Mandate is required.")
+    checkout_jwt = checkout_mandate.get("checkout_jwt")
+    if not verify_checkout_jwt(checkout_jwt, merchant_jwk):
+        raise Problem(
+            422,
+            "merchant_authorization_invalid",
+            "Checkout Mandate checkout_jwt lacks a valid merchant signature.",
+        )
+    try:
+        _, signed_payload, _ = checkout_jwt.split(".")
+        charged_payload = b64(checkout_payload(checkout))
+    except (AttributeError, ValueError):
+        raise Problem(422, "mandate_scope_mismatch", "Charged checkout payload is invalid.")
+    if not hmac.compare_digest(signed_payload, charged_payload):
+        raise Problem(
+            422,
+            "mandate_scope_mismatch",
+            "Checkout Mandate authorizes a different checkout.",
+        )
+    amount, currency = checkout_total(checkout)
+    return validate_closed_mandate_bindings(checkout_mandate, payment_mandate, amount, currency)
+
+
 def validate_closed_mandate_bindings(checkout_mandate, payment_mandate, amount, currency):
     """Validate AP2 closed-mandate bindings after credential verification.
 

@@ -26,6 +26,7 @@ from server import (
     sign_trusted_surface_jws,
     validate_closed_mandate_bindings,
     verify_checkout_jwt,
+    verify_mandate_pair,
     verify_merchant_authorization,
     verify_trusted_surface_jws,
 )
@@ -239,6 +240,16 @@ class CheckoutTest(unittest.TestCase):
             verify_trusted_surface_jws(
                 header + "." + tampered + "." + signature, self.trusted_surface_jwk
             )
+        )
+
+    def test_mandate_pair_verifies_every_binding_for_charged_checkout(self):
+        checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
+        mandates = mint_trusted_surface_mandates(checkout, self.trusted_surface)
+        self.assertEqual(
+            verify_mandate_pair(
+                checkout, mandates, self.merchant_jwk, self.trusted_surface_jwk
+            ),
+            checkout_hash(build_checkout_jwt(checkout)),
         )
 
     def test_checkout_from_expired_quote_is_refused(self):
