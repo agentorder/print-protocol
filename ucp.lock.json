@@ -9,20 +9,29 @@
   ],
   "author_date": "2026-09-04T15:10:47Z",
   "files": {
+    "source/schemas/capability.json": "2bbed66b5adbc3d77d3b5e0c9e87687da3d8bf159755ba95d89e88cd3420ef39",
     "source/schemas/common/types/amount.json": "787b78fad4d3c7456b834b4d5d068676ab3c3110ea857b02b6ad5c8ef8a9f179",
+    "source/schemas/common/types/available_payment_instrument.json": "d32ca30a463a647a53c806d8ee236be739741f015db9ba0ab13f4b67003f6507",
+    "source/schemas/common/types/constraint_expression.json": "8c0fcbfabc3f8038c89a86b7f6b9fa32c2754eba727328c6d90062584855ade2",
     "source/schemas/common/types/location_summary.json": "03fe88751f500d242fe50ecb80b1486b6bf466f39eead60ea22d04552aeb6425",
     "source/schemas/common/types/measure.json": "dfcbe1ada0d058ea95459e59a08056a1f613550023c15d5182beaba685f82a47",
     "source/schemas/common/types/postal_address.json": "6ee3504a2a53a16df406e80c62d80b7353dff088dd3de5b770292c89bc5137ca",
     "source/schemas/common/types/quantity_unit.json": "a314c84ebcf8b12b10cf3f15c067fe164a3eeb13a57b5769b5c50e69f20494da",
+    "source/schemas/common/types/request_constraints.json": "987eaa192930a0ea8d1c7b6a7cc947153e1d9da32b46d61aa49eaf782c166edf",
+    "source/schemas/common/types/reverse_domain_name.json": "a5d616402d47c602196e6e455053ee3683bc9a6e90192330297bb13abd3326eb",
     "source/schemas/common/types/signed_amount.json": "b892a84dbefd07204d251c2546c638d5a376a8ca673f3e422b913ba22b3d64c9",
     "source/schemas/common/types/total.json": "2d8618d61f31ca03a9a59362bae9c56744906d9db447b73a6222909b0e1850e4",
     "source/schemas/common/types/unit.json": "dc516d36c80edfb44347f4d5d6f39c40b1a14ebbba40ee5dc73ec3394397db82",
+    "source/schemas/payment_handler.json": "5ea09bb44a6dd5a7696150e220eae2b3b4a8eacda176793fb816a9f8240a50a6",
+    "source/schemas/service.json": "4f8453ee67d82d53f05b06fb7ea03dec0e0600faea1098b3184b71cdf0fc2423",
     "source/schemas/shopping/types/buyer.json": "24075ff053a9bc87f1b8b27fd2125df2035a7a22a35a784a58fe9b95a66d8cdb",
     "source/schemas/shopping/types/fulfillment_destination.json": "f39d0b5269b52dda5ee04b3bda4b23f1ccb2259d6208df9c8b2ba543551e5df9",
     "source/schemas/shopping/types/item.json": "0c5ef0d419484ade4a07d4e4193754ee7ab46ffebe4cb6ccfb70ca4afc8c7dab",
     "source/schemas/shopping/types/line_item.json": "0c968bf0360f1c6b753e4ae45f4ae18bb6fd29aa24e50cfbb117151f18d0adbf",
     "source/schemas/shopping/types/location_destination.json": "6ca78514d2258a7b4a62ba6403526177277467ccbe5625124f7d8e160eefd9cc",
     "source/schemas/shopping/types/shipping_destination.json": "c7907026ef03a1dca9ebbbb3d6161cb5048a6930c9e09988d1d980ed245d8a9a",
-    "source/schemas/shopping/types/unit_price.json": "85a40131603889a5aa3807c67a252e556845a274283cd684e09e89dd5604a3b0"
+    "source/schemas/shopping/types/unit_price.json": "85a40131603889a5aa3807c67a252e556845a274283cd684e09e89dd5604a3b0",
+    "source/schemas/transports/embedded_config.json": "00381600d1d5b6ce832499c00712f6192b12674b3c2c833420c0e9d3f8f196a2",
+    "source/schemas/ucp.json": "05329a3ae4546f97efcf381c3b0cb279d21063e351bcf4edd00950dc14d67c9c"
   }
 }

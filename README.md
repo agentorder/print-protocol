@@ -99,3 +99,7 @@ The draft specification, examples and implementation are available under the [MI
 ## Participate
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Use issues for reproducible defects and concrete interoperability needs. Keep customer data, artwork, quote-review links, credentials and real order details out of public channels. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
+
+## Reference-server boundary
+
+`server.py` is a loopback-only reference implementation using Python's standard-library `http.server`. The hosted AgentOrder.tech product will use a production web server and managed operational controls; it will not use this reference server.
