@@ -474,7 +474,10 @@
                 "idempotency_conflict",
                 "invalid_signature",
                 "invalid_csrf",
-                "mandate_required"
+                "mandate_required",
+                "capability_not_negotiated",
+                "not_found",
+                "forbidden"
               ]
             },
             "message": {

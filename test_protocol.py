@@ -2,11 +2,14 @@ from __future__ import annotations
 import base64, json, secrets, tempfile, threading, time, unittest
 from pathlib import Path
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 from urllib.error import HTTPError
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from server import make_server
+
+EXAMPLES = json.loads((Path(__file__).with_name("examples.json")).read_text())
 from jsonschema import Draft202012Validator
 from schema_support import ucp_registry
 
@@ -79,7 +82,7 @@ class Tests(unittest.TestCase):
         cls.app = make_server(
             0,
             Path(cls.tmp.name) / "d.sqlite",
-            {cls.platform: platform},
+            {cls.platform: platform, "https://other.example.invalid/profile.json": platform},
             printer,
             clock=lambda: cls.now[0],
         )
@@ -95,6 +98,8 @@ class Tests(unittest.TestCase):
 
     def call(self, path, body=None, key="idem-0001", sig=True, platform=None, ts=None, nonce=None):
         raw = b"" if body is None else json.dumps(body, separators=(",", ":")).encode()
+        full_url = self.base + path
+        signed_path = urlsplit(full_url).path
         headers = {}
         if body is not None:
             headers.update(
@@ -107,7 +112,11 @@ class Tests(unittest.TestCase):
         if sig:
             ts = self.now[0] if ts is None else ts
             nonce = nonce or secrets.token_urlsafe(12)
-            der = KEY.sign(f"{ts}.{nonce}.".encode() + raw, ec.ECDSA(hashes.SHA256()))
+            der = KEY.sign(
+                f"{'POST' if body is not None else 'GET'}.{signed_path}.{ts}.{nonce}.".encode()
+                + raw,
+                ec.ECDSA(hashes.SHA256()),
+            )
             r, s = decode_dss_signature(der)
             headers.update(
                 {
@@ -167,7 +176,82 @@ class Tests(unittest.TestCase):
         self.assertEqual(self.call("/rfqs", body, key="same-key", nonce="other")[0], 200)
         changed = dict(body, rfq_id="changed")
         self.assertEqual(self.call("/rfqs", changed, key="same-key", nonce="third")[0], 409)
-        self.assertEqual(self.call("/rfqs", body, key="new-key", nonce=nonce)[0], 409)
+        self.assertEqual(self.call("/rfqs", body, key="new-key-0001", nonce=nonce)[0], 409)
+
+    def test_signed_quote_read_ownership(self):
+        quote = EXAMPLES["quoted_quote"]
+        with self.app.store.db() as db:
+            db.execute(
+                "INSERT INTO quotes VALUES(?,?,?,?,?,?)",
+                (
+                    quote["quote_id"],
+                    "printer-a",
+                    self.platform,
+                    quote["rfq_id"],
+                    json.dumps(quote),
+                    "quoted",
+                ),
+            )
+        self.assertEqual(self.call("/quotes-" + quote["quote_id"], sig=True)[0], 200)
+        self.assertEqual(
+            self.call(
+                "/quotes-" + quote["quote_id"],
+                sig=True,
+                platform="https://other.example.invalid/profile.json",
+            )[0],
+            403,
+        )
+
+    def test_known_platform_without_capability_is_rejected(self):
+        self.app.store.platforms["https://no-cap.example.invalid/profile.json"] = {
+            "ucp": {"capabilities": {}},
+            "keys": [JWK],
+        }
+        self.assertEqual(
+            self.call(
+                "/rfqs",
+                dict(RFQ, rfq_id="rfq-no-cap"),
+                platform="https://no-cap.example.invalid/profile.json",
+                key="no-cap-key",
+            )[0],
+            403,
+        )
+
+    def test_idempotency_key_length_bounds(self):
+        self.assertEqual(self.call("/rfqs", dict(RFQ, rfq_id="rfq-short"), key="short-7")[0], 400)
+        self.assertEqual(self.call("/rfqs", dict(RFQ, rfq_id="rfq-long"), key="x" * 129)[0], 400)
+
+    def test_path_binding_and_body_limit(self):
+        body = dict(RFQ, rfq_id="rfq-path")
+        self.assertEqual(self.call("/rfqs", body, key="path-key", nonce="path-nonce")[0], 202)
+        # A relative-route signature is not a signature for the dispatched full path.
+        raw = json.dumps(body, separators=(",", ":")).encode()
+        ts, nonce = self.now[0], "relative-route"
+        der = KEY.sign(f"POST./rfqs.{ts}.{nonce}.".encode() + raw, ec.ECDSA(hashes.SHA256()))
+        r, sig = decode_dss_signature(der)
+        headers = {
+            "Content-Type": "application/json",
+            "Content-Length": str(len(raw)),
+            "Idempotency-Key": "relative-key",
+            "UCP-Agent": self.platform,
+            "X-AgentOrder-Signature": f"platform-key:{ts}:{nonce}:{b64(r.to_bytes(32, 'big') + sig.to_bytes(32, 'big'))}",
+        }
+        try:
+            urlopen(Request(self.base + "/rfqs", data=raw, headers=headers, method="POST"))
+        except HTTPError as error:
+            self.assertEqual(error.code, 401)
+        oversized = b"x" * 65537
+        try:
+            urlopen(
+                Request(
+                    self.base + "/rfqs",
+                    data=oversized,
+                    headers={"Content-Type": "application/json", "Content-Length": "65537"},
+                    method="POST",
+                )
+            )
+        except HTTPError as error:
+            self.assertEqual(error.code, 413)
 
 
 if __name__ == "__main__":

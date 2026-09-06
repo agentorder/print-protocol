@@ -488,7 +488,10 @@ Every AgentOrder endpoint returns this envelope for an error. `agentorder_versio
             "idempotency_conflict",
             "invalid_signature",
             "invalid_csrf",
-            "mandate_required"
+            "mandate_required",
+            "capability_not_negotiated",
+            "not_found",
+            "forbidden"
           ]
         },
         "details": {
@@ -530,7 +533,7 @@ Every AgentOrder endpoint returns this envelope for an error. `agentorder_versio
 }
 ```
 
-`code` is one of `invalid_request`, `unsupported_print_job`, `quote_expired`, `idempotency_conflict`, `invalid_signature`, `invalid_csrf`, or `mandate_required`. A buyer decline is a normal quote status, never an error. `details` is an array and may be empty. HTTP status is 400, 401, 403, 409, 410, or 422 as appropriate.
+`code` is one of `invalid_request`, `unsupported_print_job`, `quote_expired`, `idempotency_conflict`, `invalid_signature`, `invalid_csrf`, or `mandate_required`. `capability_not_negotiated`, `not_found`, and `forbidden` are also defined. `Idempotency-Key` is 8–128 characters. A buyer decline is a normal quote status, never an error. `details` is an array and may be empty. HTTP status is 400, 401, 403, 409, 410, or 422 as appropriate.
 
 ## 7. Explicit AgentOrder-only surface
 

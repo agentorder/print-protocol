@@ -16,6 +16,15 @@ from schema_support import ucp_registry, config_allows
 ROOT = Path(__file__).resolve().parent
 SCHEMA = json.loads((ROOT / "schema.json").read_text())
 VERSION = "0.2.0"
+REGISTRY = ucp_registry()
+VALIDATORS = {
+    name: Draft202012Validator(
+        {"$ref": f"#/$defs/{name}", "$defs": SCHEMA["$defs"]},
+        registry=REGISTRY,
+        format_checker=FormatChecker(),
+    )
+    for name in SCHEMA["$defs"]
+}
 
 
 def canon(v):
@@ -40,12 +49,7 @@ class Problem(Exception):
 
 
 def validate(kind, body):
-    v = Draft202012Validator(
-        {"$ref": f"#/$defs/{kind}", "$defs": SCHEMA["$defs"]},
-        registry=ucp_registry(),
-        format_checker=FormatChecker(),
-    )
-    e = list(v.iter_errors(body))
+    e = list(VALIDATORS[kind].iter_errors(body))
     if e:
         raise Problem(
             422,
@@ -56,7 +60,7 @@ def validate(kind, body):
 
 
 MIGRATIONS = [
-    """CREATE TABLE IF NOT EXISTS printers(id TEXT PRIMARY KEY,name TEXT NOT NULL,config TEXT NOT NULL,signing_key TEXT NOT NULL);CREATE TABLE IF NOT EXISTS printer_capabilities(printer_id TEXT PRIMARY KEY,body TEXT NOT NULL);CREATE TABLE IF NOT EXISTS signing_keys(printer_id TEXT PRIMARY KEY,kid TEXT NOT NULL,public_jwk TEXT NOT NULL);CREATE TABLE IF NOT EXISTS rfqs(id TEXT PRIMARY KEY,printer_id TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL);CREATE TABLE IF NOT EXISTS quotes(id TEXT PRIMARY KEY,printer_id TEXT NOT NULL,rfq_id TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL);CREATE TABLE IF NOT EXISTS idempotency_keys(printer_id TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(printer_id,key));"""
+    """CREATE TABLE IF NOT EXISTS printers(id TEXT PRIMARY KEY,name TEXT NOT NULL,config TEXT NOT NULL,signing_key TEXT NOT NULL);CREATE TABLE IF NOT EXISTS printer_capabilities(printer_id TEXT PRIMARY KEY,body TEXT NOT NULL);CREATE TABLE IF NOT EXISTS signing_keys(printer_id TEXT PRIMARY KEY,kid TEXT NOT NULL,public_jwk TEXT NOT NULL);CREATE TABLE IF NOT EXISTS rfqs(id TEXT NOT NULL,printer_id TEXT NOT NULL,platform TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(printer_id,platform,id));CREATE TABLE IF NOT EXISTS quotes(id TEXT PRIMARY KEY,printer_id TEXT NOT NULL,platform TEXT NOT NULL,rfq_id TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL);CREATE TABLE IF NOT EXISTS idempotency_keys(printer_id TEXT NOT NULL,platform TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(printer_id,platform,key));CREATE TABLE IF NOT EXISTS nonces(platform TEXT NOT NULL,nonce TEXT NOT NULL,ts INTEGER NOT NULL,PRIMARY KEY(platform,nonce));"""
 ]
 
 
@@ -94,7 +98,7 @@ class Store:
         with self.db() as d:
             r = d.execute("SELECT * FROM printers WHERE id=?", (pid,)).fetchone()
         if not r:
-            raise Problem(404, "invalid_request", "Unknown printer.")
+            raise Problem(404, "not_found", "Unknown printer.")
         return r
 
     def profile(self, pid):
@@ -147,14 +151,16 @@ class Store:
             "keys": [json.loads(k["public_jwk"])],
         }
 
-    def verify(self, pid, headers, raw):
+    def verify(self, pid, headers, raw, method, path):
         platform = headers.get("UCP-Agent", "")
         profile = self.platforms.get(platform)
         if not profile:
             raise Problem(401, "invalid_signature", "Unknown platform profile.")
         active = profile["ucp"]["capabilities"].get("org.agentorder.shopping.print_quote", [])
         if not any(x["version"] == "2026-09-06" for x in active):
-            raise Problem(403, "invalid_signature", "AgentOrder capability was not negotiated.")
+            raise Problem(
+                403, "capability_not_negotiated", "AgentOrder capability was not negotiated."
+            )
         try:
             kid, ts, nonce, sig = headers["X-AgentOrder-Signature"].split(":")
             ts = int(ts)
@@ -162,8 +168,6 @@ class Store:
             raise Problem(401, "invalid_signature", "Malformed request signature.")
         if abs(self.clock() - ts) > 300:
             raise Problem(401, "invalid_signature", "Stale request signature.")
-        if nonce in getattr(self, "nonces", set()):
-            raise Problem(409, "idempotency_conflict", "Replayed request signature.")
         key = next((x for x in profile["keys"] if x.get("kid") == kid), None)
         if not key:
             raise Problem(401, "invalid_signature", "Unknown signing key.")
@@ -178,17 +182,16 @@ class Store:
                 encode_dss_signature(
                     int.from_bytes(raw_sig[:32], "big"), int.from_bytes(raw_sig[32:], "big")
                 ),
-                f"{ts}.{nonce}.".encode() + raw,
+                f"{method}.{path}.{ts}.{nonce}.".encode() + raw,
                 ec.ECDSA(hashes.SHA256()),
             )
         except (InvalidSignature, ValueError):
             raise Problem(401, "invalid_signature", "Invalid request signature.")
-        self.nonces = getattr(self, "nonces", set())
-        self.nonces.add(nonce)
+        return platform, nonce, ts
 
-    def rfq(self, pid, key, body):
-        if not key or len(key) < 8:
-            raise Problem(400, "idempotency_conflict", "Idempotency-Key required.")
+    def rfq(self, pid, platform, nonce, ts, key, body):
+        if not key or not 8 <= len(key) <= 128:
+            raise Problem(400, "invalid_request", "Idempotency-Key required.")
         validate("rfq", body)
         r = self.printer(pid)
         config = json.loads(r["config"])
@@ -199,32 +202,40 @@ class Store:
         fp = hashlib.sha256(canon(body).encode()).hexdigest()
         response = {"agentorder_version": VERSION, "rfq_id": body["rfq_id"], "status": "received"}
         with self.db() as d:
+            d.execute("BEGIN IMMEDIATE")
             old = d.execute(
-                "SELECT * FROM idempotency_keys WHERE printer_id=? AND key=?", (pid, key)
+                "SELECT * FROM idempotency_keys WHERE printer_id=? AND platform=? AND key=?",
+                (pid, platform, key),
             ).fetchone()
             if old:
                 if old["fingerprint"] != fp:
                     raise Problem(409, "idempotency_conflict", "Key used with different body.")
                 return json.loads(old["response"]), True
             try:
+                d.execute("DELETE FROM nonces WHERE ts < ?", (int(self.clock()) - 300,))
+                try:
+                    d.execute("INSERT INTO nonces VALUES(?,?,?)", (platform, nonce, ts))
+                except sqlite3.IntegrityError:
+                    raise Problem(409, "idempotency_conflict", "Replayed request signature.")
                 d.execute(
-                    "INSERT INTO rfqs VALUES(?,?,?,?,?)",
-                    (body["rfq_id"], pid, canon(body), "open", self.clock()),
+                    "INSERT INTO rfqs VALUES(?,?,?,?,?,?)",
+                    (body["rfq_id"], pid, platform, canon(body), "open", self.clock()),
                 )
             except sqlite3.IntegrityError:
-                raise Problem(409, "idempotency_conflict", "RFQ id already exists.")
+                raise Problem(409, "idempotency_conflict", "Replayed RFQ identifier or signature.")
             d.execute(
-                "INSERT INTO idempotency_keys VALUES(?,?,?,?)", (pid, key, fp, canon(response))
+                "INSERT INTO idempotency_keys VALUES(?,?,?,?,?)",
+                (pid, platform, key, fp, canon(response)),
             )
         return response, False
 
-    def get_quote(self, pid, qid):
+    def get_quote(self, pid, platform, qid):
         with self.db() as d:
             r = d.execute("SELECT * FROM quotes WHERE id=?", (qid,)).fetchone()
         if not r:
-            raise Problem(404, "invalid_request", "Quote not found.")
-        if r["printer_id"] != pid:
-            raise Problem(403, "invalid_signature", "Cross-tenant quote access denied.")
+            raise Problem(404, "not_found", "Quote not found.")
+        if r["printer_id"] != pid or r["platform"] != platform:
+            raise Problem(403, "forbidden", "Cross-tenant quote access denied.")
         return json.loads(r["body"])
 
 
@@ -246,9 +257,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get_content_type() != "application/json":
             raise Problem(400, "invalid_request", "JSON required.")
         try:
-            return self.rfile.read(int(self.headers["Content-Length"]))
+            length = int(self.headers["Content-Length"])
         except Exception:
             raise Problem(400, "invalid_request", "Content-Length required.")
+        if length < 0:
+            raise Problem(400, "invalid_request", "Invalid Content-Length.")
+        if length > 65536:
+            raise Problem(413, "invalid_request", "Request body exceeds 64 KiB.")
+        return self.rfile.read(length)
 
     def handle_request(self):
         try:
@@ -268,7 +284,14 @@ class Handler(BaseHTTPRequestHandler):
                 and parts[1:4] == ["ucp", "v1", "printers"]
                 and parts[5].startswith("quotes-")
             ):
-                return self.reply(200, store.get_quote(parts[4], parts[5][7:]))
+                return self.reply(
+                    200,
+                    store.get_quote(
+                        parts[4],
+                        store.verify(parts[4], self.headers, b"", self.command, p)[0],
+                        parts[5][7:],
+                    ),
+                )
             if (
                 self.command == "POST"
                 and len(parts) == 6
@@ -276,13 +299,15 @@ class Handler(BaseHTTPRequestHandler):
                 and parts[5] == "rfqs"
             ):
                 raw = self.read()
-                store.verify(parts[4], self.headers, raw)
+                platform, nonce, ts = store.verify(parts[4], self.headers, raw, self.command, p)
                 body = json.loads(raw)
-                out, replay = store.rfq(parts[4], self.headers.get("Idempotency-Key"), body)
+                out, replay = store.rfq(
+                    parts[4], platform, nonce, ts, self.headers.get("Idempotency-Key"), body
+                )
                 return self.reply(
                     200 if replay else 202, out, {"Idempotency-Replayed": str(replay).lower()}
                 )
-            raise Problem(404, "invalid_request", "Endpoint not found.")
+            raise Problem(404, "not_found", "Endpoint not found.")
         except Problem as e:
             self.reply(e.status, e.body)
         except Exception:
