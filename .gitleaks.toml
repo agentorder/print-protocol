@@ -1,2 +1,7 @@
 [extend]
 useDefault = true
+
+[allowlist]
+regexes = [
+  '''47af578c9af0d585b2225c03037c116c880a1539826e77e6c9cdf741494392d3''',
+]
