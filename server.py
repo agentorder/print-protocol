@@ -8,10 +8,14 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+from cryptography.hazmat.primitives.asymmetric.utils import (
+    decode_dss_signature,
+    encode_dss_signature,
+)
 from cryptography.exceptions import InvalidSignature
 from jsonschema import Draft202012Validator, FormatChecker
 from schema_support import ucp_registry, config_allows
+from jcs import jcs_canonicalize
 
 ROOT = Path(__file__).resolve().parent
 SCHEMA = json.loads((ROOT / "schema.json").read_text())
@@ -33,6 +37,10 @@ def canon(v):
 
 def b64d(v):
     return base64.urlsafe_b64decode(v + "=" * (-len(v) % 4))
+
+
+def b64(v):
+    return base64.urlsafe_b64encode(v).rstrip(b"=").decode()
 
 
 def stamp(t):
@@ -70,6 +78,7 @@ class Store:
         self.base = base
         self.platforms = platforms
         self.clock = clock
+        self.merchant_keys = {}
         with self.db() as d:
             for q in MIGRATIONS:
                 d.executescript(q)
@@ -80,6 +89,8 @@ class Store:
         return d
 
     def seed(self, printer):
+        if printer.get("private_key"):
+            self.merchant_keys[printer["id"]] = printer["private_key"]
         with self.db() as d:
             d.execute(
                 "INSERT OR REPLACE INTO printers VALUES(?,?,?,?)",
@@ -237,6 +248,76 @@ class Store:
         if r["printer_id"] != pid or r["platform"] != platform:
             raise Problem(403, "forbidden", "Cross-tenant quote access denied.")
         return json.loads(r["body"])
+
+    def build_checkout(self, pid, platform, qid):
+        """Build and merchant-sign a UCP checkout from one live quote."""
+        quote = self.get_quote(pid, platform, qid)
+        if (
+            datetime.fromisoformat(quote["expires_at"].replace("Z", "+00:00")).timestamp()
+            <= self.clock()
+        ):
+            raise Problem(410, "quote_expired", "Quote has expired.")
+        key = self.merchant_keys.get(pid)
+        if key is None:
+            raise Problem(500, "invalid_request", "Merchant signing key unavailable.")
+        with self.db() as d:
+            rfq = d.execute(
+                "SELECT body FROM rfqs WHERE printer_id=? AND platform=? AND id=?",
+                (pid, platform, quote["rfq_id"]),
+            ).fetchone()
+        rfq_body = json.loads(rfq["body"])
+        currency = json.loads(self.printer(pid)["config"])["business_cards"]["currency"]
+        price = quote["quote_line_item"]["item"]["price"]
+        checkout = {
+            "ucp": {"version": "2026-06-15", "status": "success", "payment_handlers": {}},
+            "id": "checkout:" + qid,
+            "line_items": [quote["quote_line_item"]],
+            "buyer": rfq_body["buyer"],
+            "fulfillment_destination": rfq_body["fulfillment_destination"],
+            "status": "ready_for_complete",
+            "currency": currency,
+            "totals": [{"type": "subtotal", "amount": price}, {"type": "total", "amount": price}],
+            "links": [],
+        }
+        # Detached JWS still base64url-encodes the JCS payload in the Appendix F signing input.
+        payload = b64(jcs_canonicalize(checkout)).encode()
+        header = b64(
+            json.dumps(
+                {"alg": "ES256", "kid": self.printer(pid)["id"]}, separators=(",", ":")
+            ).encode()
+        ).encode()
+        der = key.sign(header + b"." + payload, ec.ECDSA(hashes.SHA256()))
+        r, s = decode_dss_signature(der)
+        checkout["ap2"] = {
+            "merchant_authorization": header.decode()
+            + ".."
+            + b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
+        }
+        return checkout
+
+
+def verify_merchant_authorization(checkout, jwk):
+    """Verify the detached Appendix F merchant authorization for a checkout."""
+    body = dict(checkout)
+    authorization = body.pop("ap2")["merchant_authorization"]
+    header, empty, signature = authorization.split(".")
+    if empty:
+        return False
+    public = ec.EllipticCurvePublicNumbers(
+        int.from_bytes(b64d(jwk["x"]), "big"), int.from_bytes(b64d(jwk["y"]), "big"), ec.SECP256R1()
+    ).public_key()
+    raw_signature = b64d(signature)
+    try:
+        public.verify(
+            encode_dss_signature(
+                int.from_bytes(raw_signature[:32], "big"), int.from_bytes(raw_signature[32:], "big")
+            ),
+            header.encode() + b"." + b64(jcs_canonicalize(body)).encode(),
+            ec.ECDSA(hashes.SHA256()),
+        )
+        return True
+    except (InvalidSignature, ValueError):
+        return False
 
 
 class Handler(BaseHTTPRequestHandler):
