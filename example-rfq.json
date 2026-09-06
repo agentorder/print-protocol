@@ -1,25 +1,25 @@
 {
-  "protocol_version": "0.1.0",
-  "client_reference": "business-cards-demo-001",
-  "product": "business_cards",
-  "quantity": 500,
-  "size_mm": {
-    "width": 90,
-    "height": 55
+  "agentorder_version": "0.2.0",
+  "rfq_id": "rfq-example-nz-001",
+  "buyer": {
+    "first_name": "Example",
+    "last_name": "Buyer",
+    "email": "buyer@example.invalid"
   },
-  "stock_gsm": 350,
-  "stock_finish": "silk",
-  "sides": 2,
-  "colour": "full_colour",
-  "finishing": "none",
-  "fulfilment": {
-    "method": "pickup"
+  "fulfillment_destination": {
+    "type": "shipping_address",
+    "id": "destination-example-001",
+    "address_locality": "Wellington",
+    "address_country": "NZ",
+    "postal_code": "6011"
   },
-  "artwork": {
-    "status": "not_supplied",
-    "media_type": "application/pdf",
-    "pages": 2,
-    "bleed_mm": 3,
-    "colour_space": "CMYK"
+  "print_job": {
+    "quantity": 500,
+    "finished_size": "au_nz_90x55mm",
+    "sides": 2,
+    "colour": "CMYK",
+    "stock": {"weight_gsm": 350, "finish": "silk"},
+    "finishing": "none",
+    "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}
   }
 }

@@ -1,544 +1,109 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentorder.org/drafts/0.1.0/schema.json",
-  "title": "AgentOrder Print Protocol 0.1.0 draft messages",
-  "$comment": "Identifier only; hosting at this URL is not yet provisioned. Select a message using #/$defs/rfq, quote, order_request, order, discovery or error.",
+  "$id": "https://agentorder.org/schemas/0.2/schema.json",
+  "title": "AgentOrder Print Protocol v0.2 messages",
   "oneOf": [
-    {
-      "$ref": "#/$defs/rfq"
-    },
-    {
-      "$ref": "#/$defs/quote"
-    },
-    {
-      "$ref": "#/$defs/order_request"
-    },
-    {
-      "$ref": "#/$defs/order"
-    },
-    {
-      "$ref": "#/$defs/discovery"
-    },
-    {
-      "$ref": "#/$defs/error"
-    }
+    {"$ref": "#/$defs/rfq"},
+    {"$ref": "#/$defs/quote"},
+    {"$ref": "#/$defs/status"},
+    {"$ref": "#/$defs/error"},
+    {"$ref": "#/$defs/capability_config"}
   ],
   "$defs": {
-    "size": {
+    "capability_config": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["business_cards"],
       "properties": {
-        "width": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 2000
-        },
-        "height": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 2000
+        "business_cards": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "finished_size_presets", "sides", "stock_gsm", "stock_finish", "quantity", "finishing"],
+          "properties": {
+            "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+            "finished_size_presets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["us_3.5x2in", "uk_eu_85x55mm", "au_nz_90x55mm"]}},
+            "sides": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": [1, 2]}},
+            "stock_gsm": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 150, "maximum": 600}},
+            "stock_finish": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["uncoated", "silk", "matte", "gloss"]}},
+            "quantity": {"type": "object", "additionalProperties": false, "required": ["minimum", "maximum", "increment"], "properties": {"minimum": {"type": "integer", "minimum": 1}, "maximum": {"type": "integer", "minimum": 1}, "increment": {"type": "integer", "minimum": 1}}},
+            "finishing": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["none", "matte_laminate_both_sides"]}}
+          }
         }
-      },
-      "required": [
-        "width",
-        "height"
-      ],
-      "additionalProperties": false
+      }
     },
-    "artwork": {
+    "print_job": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["quantity", "finished_size", "sides", "colour", "stock", "finishing", "artwork"],
       "properties": {
-        "status": {
-          "enum": [
-            "not_supplied",
-            "metadata_only"
-          ]
-        },
-        "media_type": {
-          "enum": [
-            "application/pdf"
-          ]
-        },
-        "pages": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "bleed_mm": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 20
-        },
-        "colour_space": {
-          "enum": [
-            "CMYK",
-            "RGB"
-          ]
-        }
-      },
-      "required": [
-        "status",
-        "media_type",
-        "pages",
-        "bleed_mm",
-        "colour_space"
-      ],
-      "additionalProperties": false
+        "quantity": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "finished_size": {"enum": ["us_3.5x2in", "uk_eu_85x55mm", "au_nz_90x55mm"]},
+        "sides": {"enum": [1, 2]},
+        "colour": {"enum": ["CMYK", "black"]},
+        "stock": {"type": "object", "additionalProperties": false, "required": ["weight_gsm", "finish"], "properties": {"weight_gsm": {"type": "integer", "minimum": 150, "maximum": 600}, "finish": {"enum": ["uncoated", "silk", "matte", "gloss"]}}},
+        "finishing": {"enum": ["none", "matte_laminate_both_sides"]},
+        "artwork": {"type": "object", "additionalProperties": false, "required": ["url"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}
+      }
     },
     "rfq": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["agentorder_version", "rfq_id", "buyer", "fulfillment_destination", "print_job"],
       "properties": {
-        "protocol_version": {
-          "const": "0.1.0"
-        },
-        "client_reference": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "product": {
-          "const": "business_cards"
-        },
-        "quantity": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 1000000
-        },
-        "size_mm": {
-          "$ref": "#/$defs/size"
-        },
-        "stock_gsm": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 2000
-        },
-        "stock_finish": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "sides": {
-          "enum": [
-            1,
-            2
-          ]
-        },
-        "colour": {
-          "enum": [
-            "full_colour",
-            "black_only"
-          ]
-        },
-        "finishing": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "fulfilment": {
-          "type": "object",
-          "properties": {
-            "method": {
-              "enum": [
-                "pickup",
-                "delivery"
-              ]
-            }
-          },
-          "required": [
-            "method"
-          ],
-          "additionalProperties": false
-        },
-        "artwork": {
-          "$ref": "#/$defs/artwork"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "client_reference",
-        "product",
-        "quantity",
-        "size_mm",
-        "stock_gsm",
-        "stock_finish",
-        "sides",
-        "colour",
-        "finishing",
-        "fulfilment",
-        "artwork"
-      ],
-      "additionalProperties": false
+        "agentorder_version": {"const": "0.2.0"},
+        "rfq_id": {"type": "string", "minLength": 1},
+        "buyer": {"$ref": "https://ucp.dev/schemas/shopping/types/buyer.json"},
+        "fulfillment_destination": {"$ref": "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json"},
+        "print_job": {"$ref": "#/$defs/print_job"}
+      }
     },
-    "money": {
+    "decline": {
       "type": "object",
-      "properties": {
-        "currency": {
-          "type": "string",
-          "pattern": "^[A-Z]{3}$"
-        },
-        "subtotal_minor": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "tax_minor": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "total_minor": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "tax_basis_points": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "tax_label": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        }
-      },
-      "required": [
-        "currency",
-        "subtotal_minor",
-        "tax_minor",
-        "total_minor",
-        "tax_basis_points",
-        "tax_label"
-      ],
-      "additionalProperties": false
-    },
-    "line": {
-      "type": "object",
-      "properties": {
-        "description": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "amount_minor": {
-          "type": "integer",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "description",
-        "amount_minor"
-      ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {"reason": {"enum": ["price", "lead_time", "specification", "artwork", "other"]}}
     },
     "quote": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["agentorder_version", "quote_id", "rfq_id", "status", "print_job"],
       "properties": {
-        "protocol_version": {
-          "const": "0.1.0"
-        },
-        "mode": {
-          "const": "demo"
-        },
-        "quote_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{8,100}$"
-        },
-        "status": {
-          "enum": [
-            "quoted",
-            "approved",
-            "rejected",
-            "expired",
-            "ordered"
-          ]
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "expires_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "request": {
-          "$ref": "#/$defs/rfq"
-        },
-        "lines": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/line"
-          },
-          "minItems": 1
-        },
-        "money": {
-          "$ref": "#/$defs/money"
-        },
-        "production": {
-          "type": "object",
-          "properties": {
-            "business_days": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "starts_after": {
-              "const": "printer_accepts_artwork"
-            }
-          },
-          "required": [
-            "business_days",
-            "starts_after"
-          ],
-          "additionalProperties": false
-        },
-        "artwork_requirements": {
-          "type": "object",
-          "properties": {
-            "media_type": {
-              "const": "application/pdf"
-            },
-            "pages": {
-              "const": 2
-            },
-            "bleed_mm": {
-              "const": 3
-            },
-            "colour_space": {
-              "const": "CMYK"
-            }
-          },
-          "required": [
-            "media_type",
-            "pages",
-            "bleed_mm",
-            "colour_space"
-          ],
-          "additionalProperties": false
-        },
-        "review_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "quote_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "order_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "notice": {
-          "type": "string"
-        }
+        "agentorder_version": {"const": "0.2.0"},
+        "quote_id": {"type": "string", "minLength": 1},
+        "rfq_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["quoted", "declined"]},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "print_job": {"$ref": "#/$defs/print_job"},
+        "lead_time": {"type": "object", "additionalProperties": false, "required": ["business_days", "starts_after"], "properties": {"business_days": {"type": "integer", "minimum": 1}, "starts_after": {"const": "artwork_accepted"}}},
+        "review": {"type": "object", "additionalProperties": false, "required": ["url"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://"}}},
+        "quote_line_item": {"type": "object", "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json"},
+        "decline": {"$ref": "#/$defs/decline"},
+        "declined_at": {"type": "string", "format": "date-time"}
       },
-      "required": [
-        "protocol_version",
-        "mode",
-        "quote_id",
-        "status",
-        "created_at",
-        "expires_at",
-        "request",
-        "lines",
-        "money",
-        "production",
-        "artwork_requirements",
-        "review_url",
-        "quote_url",
-        "order_url",
-        "notice"
-      ],
-      "additionalProperties": false
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "quoted"}}, "required": ["status"]}, "then": {"required": ["expires_at", "lead_time", "review", "quote_line_item"]}},
+        {"if": {"properties": {"status": {"const": "declined"}}, "required": ["status"]}, "then": {"required": ["decline", "declined_at"]}}
+      ]
     },
-    "order_request": {
+    "status": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["agentorder_version", "quote_id", "proof_status", "production_status"],
       "properties": {
-        "protocol_version": {
-          "const": "0.1.0"
-        },
-        "quote_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{8,100}$"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "quote_id"
-      ],
-      "additionalProperties": false
-    },
-    "order": {
-      "type": "object",
-      "properties": {
-        "protocol_version": {
-          "const": "0.1.0"
-        },
-        "mode": {
-          "const": "demo"
-        },
-        "order_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{8,100}$"
-        },
-        "quote_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{8,100}$"
-        },
-        "client_reference": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "status": {
-          "const": "pending_artwork_review"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "approved_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "money": {
-          "$ref": "#/$defs/money"
-        },
-        "order_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "notice": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "protocol_version",
-        "mode",
-        "order_id",
-        "quote_id",
-        "client_reference",
-        "status",
-        "created_at",
-        "approved_at",
-        "money",
-        "order_url",
-        "notice"
-      ],
-      "additionalProperties": false
-    },
-    "discovery": {
-      "type": "object",
-      "properties": {
-        "protocol": {
-          "const": "AgentOrder Print Protocol"
-        },
-        "protocol_version": {
-          "const": "0.1.0"
-        },
-        "mode": {
-          "const": "demo"
-        },
-        "printer_name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "specification_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "schema_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "catalog_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "rfq_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "orders_url": {
-          "type": "string",
-          "format": "uri",
-          "maxLength": 2048
-        },
-        "authentication": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "bearer"
-            },
-            "scope": {
-              "const": "single_printer_demo"
-            }
-          },
-          "required": [
-            "type",
-            "scope"
-          ],
-          "additionalProperties": false
-        },
-        "human_approval_required": {
-          "const": true
-        },
-        "notice": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "protocol",
-        "protocol_version",
-        "mode",
-        "printer_name",
-        "specification_url",
-        "schema_url",
-        "catalog_url",
-        "rfq_url",
-        "orders_url",
-        "authentication",
-        "human_approval_required",
-        "notice"
-      ],
-      "additionalProperties": false
+        "agentorder_version": {"const": "0.2.0"},
+        "quote_id": {"type": "string", "minLength": 1},
+        "proof_status": {"enum": ["not_required", "pending", "approved", "changes_requested"]},
+        "production_status": {"enum": ["awaiting_artwork", "artwork_review", "in_production", "dispatched", "completed", "on_hold"]}
+      }
     },
     "error": {
       "type": "object",
+      "additionalProperties": false,
+      "required": ["agentorder_version", "error"],
       "properties": {
-        "error": {
-          "type": "object",
-          "properties": {
-            "code": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            },
-            "message": {
-              "type": "string"
-            },
-            "details": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "required": [
-            "code",
-            "message",
-            "details"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "error"
-      ],
-      "additionalProperties": false
+        "agentorder_version": {"const": "0.2.0"},
+        "error": {"type": "object", "additionalProperties": false, "required": ["code", "message", "details"], "properties": {"code": {"enum": ["invalid_request", "unsupported_print_job", "quote_expired", "idempotency_conflict", "invalid_signature", "invalid_csrf", "mandate_required"]}, "message": {"type": "string", "minLength": 1}, "details": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["code"], "properties": {"field": {"type": "string"}, "code": {"type": "string"}}}}}}
+      }
     }
   }
 }

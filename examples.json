@@ -1,140 +1,97 @@
 {
-  "discovery": {
-    "protocol": "AgentOrder Print Protocol",
-    "protocol_version": "0.1.0",
-    "mode": "demo",
-    "printer_name": "AgentOrder Demonstration Printer",
-    "specification_url": "https://printer.example/specification",
-    "schema_url": "https://printer.example/schema.json",
-    "catalog_url": "https://printer.example/catalog",
-    "rfq_url": "https://printer.example/v0.1/rfqs",
-    "orders_url": "https://printer.example/v0.1/orders",
-    "authentication": {
-      "type": "bearer",
-      "scope": "single_printer_demo"
+  "business_profile": {
+    "ucp": {
+      "version": "2026-06-15",
+      "services": {
+        "dev.ucp.shopping": [{
+          "version": "2026-06-15",
+          "spec": "https://ucp.dev/specification/overview/",
+          "transport": "rest",
+          "schema": "https://ucp.dev/services/shopping/rest.openapi.json",
+          "endpoint": "https://printer.example.invalid/ucp/v1"
+        }]
+      },
+      "capabilities": {
+        "dev.ucp.shopping.checkout": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/shopping/checkout.json"}],
+        "dev.ucp.common.payment.ap2_mandate": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/common/payment_ap2_mandate.json", "extends": "dev.ucp.shopping.checkout"}],
+        "org.agentorder.shopping.print_quote": [{
+          "version": "2026-09-06",
+          "spec": "https://agentorder.org/specification/0.2",
+          "schema": "https://agentorder.org/schemas/0.2/schema.json",
+          "extends": ["dev.ucp.shopping.cart", "dev.ucp.shopping.checkout"],
+          "config": {
+            "business_cards": {
+              "currency": "NZD",
+              "finished_size_presets": ["au_nz_90x55mm"],
+              "sides": [1, 2],
+              "stock_gsm": [300, 350],
+              "stock_finish": ["silk", "matte"],
+              "quantity": {"minimum": 100, "maximum": 10000, "increment": 50},
+              "finishing": ["none", "matte_laminate_both_sides"]
+            }
+          }
+        }]
+      },
+      "payment_handlers": {}
     },
-    "human_approval_required": true,
-    "notice": "Demonstration only. Sample prices; no payment, printing or fulfilment takes place."
+    "keys": []
+  },
+  "platform_profile": {
+    "ucp": {
+      "version": "2026-06-15",
+      "services": {"dev.ucp.shopping": [{"version": "2026-06-15", "transport": "mcp", "schema": "https://agentorder.org/openrpc/reference-agent.json"}]},
+      "capabilities": {
+        "dev.ucp.shopping.checkout": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/shopping/checkout.json"}],
+        "dev.ucp.common.payment.ap2_mandate": [{"version": "2026-06-15", "spec": "https://ucp.dev/specification/", "schema": "https://ucp.dev/schemas/common/payment_ap2_mandate.json", "extends": "dev.ucp.shopping.checkout"}],
+        "org.agentorder.shopping.print_quote": [{"version": "2026-09-06", "spec": "https://agentorder.org/specification/0.2", "schema": "https://agentorder.org/schemas/0.2/schema.json", "extends": ["dev.ucp.shopping.cart", "dev.ucp.shopping.checkout"]}]
+      },
+      "payment_handlers": {}
+    },
+    "keys": []
+  },
+  "capability_config": {
+    "business_cards": {
+      "currency": "NZD",
+      "finished_size_presets": ["au_nz_90x55mm"],
+      "sides": [1, 2],
+      "stock_gsm": [300, 350],
+      "stock_finish": ["silk", "matte"],
+      "quantity": {"minimum": 100, "maximum": 10000, "increment": 50},
+      "finishing": ["none", "matte_laminate_both_sides"]
+    }
   },
   "rfq": {
-    "protocol_version": "0.1.0",
-    "client_reference": "business-cards-demo-001",
-    "product": "business_cards",
-    "quantity": 500,
-    "size_mm": {
-      "width": 90,
-      "height": 55
-    },
-    "stock_gsm": 350,
-    "stock_finish": "silk",
-    "sides": 2,
-    "colour": "full_colour",
-    "finishing": "none",
-    "fulfilment": {
-      "method": "pickup"
-    },
-    "artwork": {
-      "status": "not_supplied",
-      "media_type": "application/pdf",
-      "pages": 2,
-      "bleed_mm": 3,
-      "colour_space": "CMYK"
-    }
+    "agentorder_version": "0.2.0",
+    "rfq_id": "rfq-example-nz-001",
+    "buyer": {"first_name": "Example", "last_name": "Buyer", "email": "buyer@example.invalid"},
+    "fulfillment_destination": {"type": "shipping_address", "id": "destination-example-001", "address_locality": "Wellington", "address_country": "NZ", "postal_code": "6011"},
+    "print_job": {"quantity": 500, "finished_size": "au_nz_90x55mm", "sides": 2, "colour": "CMYK", "stock": {"weight_gsm": 350, "finish": "silk"}, "finishing": "none", "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}}
   },
-  "quote": {
-    "protocol_version": "0.1.0",
-    "mode": "demo",
-    "quote_id": "example_quote_001",
+  "quoted_quote": {
+    "agentorder_version": "0.2.0",
+    "quote_id": "quote-example-nz-001",
+    "rfq_id": "rfq-example-nz-001",
     "status": "quoted",
-    "created_at": "2027-01-15T08:00:00Z",
-    "expires_at": "2027-01-16T08:00:00Z",
-    "request": {
-      "protocol_version": "0.1.0",
-      "client_reference": "business-cards-demo-001",
-      "product": "business_cards",
-      "quantity": 500,
-      "size_mm": {
-        "width": 90,
-        "height": 55
-      },
-      "stock_gsm": 350,
-      "stock_finish": "silk",
-      "sides": 2,
-      "colour": "full_colour",
-      "finishing": "none",
-      "fulfilment": {
-        "method": "pickup"
-      },
-      "artwork": {
-        "status": "not_supplied",
-        "media_type": "application/pdf",
-        "pages": 2,
-        "bleed_mm": 3,
-        "colour_space": "CMYK"
-      }
-    },
-    "lines": [
-      {
-        "description": "500 double-sided business cards",
-        "amount_minor": 9500
-      },
-      {
-        "description": "none",
-        "amount_minor": 0
-      }
-    ],
-    "money": {
-      "currency": "NZD",
-      "subtotal_minor": 9500,
-      "tax_minor": 1425,
-      "total_minor": 10925,
-      "tax_basis_points": 1500,
-      "tax_label": "Illustrative tax"
-    },
-    "production": {
-      "business_days": 3,
-      "starts_after": "printer_accepts_artwork"
-    },
-    "artwork_requirements": {
-      "media_type": "application/pdf",
-      "pages": 2,
-      "bleed_mm": 3,
-      "colour_space": "CMYK"
-    },
-    "review_url": "https://printer.example/review/example_review_token_not_valid",
-    "quote_url": "https://printer.example/v0.1/quotes/example_quote_001",
-    "order_url": "https://printer.example/v0.1/orders",
-    "notice": "Demonstration only. Sample prices; no payment, printing or fulfilment takes place."
-  },
-  "order_request": {
-    "protocol_version": "0.1.0",
-    "quote_id": "example_quote_001"
-  },
-  "order": {
-    "protocol_version": "0.1.0",
-    "mode": "demo",
-    "order_id": "example_order_001",
-    "quote_id": "example_quote_001",
-    "client_reference": "business-cards-demo-001",
-    "status": "pending_artwork_review",
-    "created_at": "2027-01-15T08:00:00Z",
-    "approved_at": "2027-01-15T08:00:00Z",
-    "money": {
-      "currency": "NZD",
-      "subtotal_minor": 9500,
-      "tax_basis_points": 1500,
-      "tax_label": "Illustrative tax",
-      "tax_minor": 1425,
-      "total_minor": 10925
-    },
-    "order_url": "https://printer.example/v0.1/orders/example_order_001",
-    "notice": "Demonstration only. Sample prices; no payment, printing or fulfilment takes place."
-  },
-  "error": {
-    "error": {
-      "code": "approval_required",
-      "message": "The customer must approve this exact quote first.",
-      "details": []
+    "expires_at": "2026-10-01T00:00:00Z",
+    "print_job": {"quantity": 500, "finished_size": "au_nz_90x55mm", "sides": 2, "colour": "CMYK", "stock": {"weight_gsm": 350, "finish": "silk"}, "finishing": "none", "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}},
+    "lead_time": {"business_days": 3, "starts_after": "artwork_accepted"},
+    "review": {"url": "https://printer.example.invalid/review/quote-example-nz-001"},
+    "quote_line_item": {
+      "id": "quote-example-nz-001",
+      "item": {"id": "quote-example-nz-001", "title": "500 business cards — AU/NZ 90 × 55 mm, 2-sided, 350 gsm silk", "price": 10900},
+      "quantity": 1,
+      "totals": [{"type": "subtotal", "amount": 10900}, {"type": "total", "amount": 10900}]
     }
-  }
+  },
+  "declined_quote": {
+    "agentorder_version": "0.2.0",
+    "quote_id": "quote-example-nz-002",
+    "rfq_id": "rfq-example-nz-001",
+    "status": "declined",
+    "print_job": {"quantity": 500, "finished_size": "au_nz_90x55mm", "sides": 2, "colour": "CMYK", "stock": {"weight_gsm": 350, "finish": "silk"}, "finishing": "none", "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"}},
+    "decline": {"reason": "lead_time"},
+    "declined_at": "2026-09-30T00:00:00Z"
+  },
+  "status": {"agentorder_version": "0.2.0", "quote_id": "quote-example-nz-001", "proof_status": "not_required", "production_status": "awaiting_artwork"},
+  "error": {"agentorder_version": "0.2.0", "error": {"code": "quote_expired", "message": "This quote has expired; request a fresh quote.", "details": []}}
 }

@@ -52,6 +52,120 @@ Each printer declares accepted business-card values in the capability's UCP `con
 
 `config` is the printer's authoritative accepted-value declaration. The wire schema permits only the three named regional presets; custom sizes are out of scope for v0.2.
 
+### Capability config schema
+
+<!-- agentorder-schema:capability_config -->
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "business_cards": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        "finished_size_presets": {
+          "items": {
+            "enum": [
+              "us_3.5x2in",
+              "uk_eu_85x55mm",
+              "au_nz_90x55mm"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "finishing": {
+          "items": {
+            "enum": [
+              "none",
+              "matte_laminate_both_sides"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "quantity": {
+          "additionalProperties": false,
+          "properties": {
+            "increment": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maximum": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "minimum": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "minimum",
+            "maximum",
+            "increment"
+          ],
+          "type": "object"
+        },
+        "sides": {
+          "items": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "stock_finish": {
+          "items": {
+            "enum": [
+              "uncoated",
+              "silk",
+              "matte",
+              "gloss"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "stock_gsm": {
+          "items": {
+            "maximum": 600,
+            "minimum": 150,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "currency",
+        "finished_size_presets",
+        "sides",
+        "stock_gsm",
+        "stock_finish",
+        "quantity",
+        "finishing"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "business_cards"
+  ],
+  "type": "object"
+}
+```
+
 ### First capable agent
 
 The initial platform that declares the AgentOrder capability is the AgentOrder reference client: an MCP server with an A2A agent card. Its UCP platform profile advertises the same capability/version as the printer profile. That gives the pilot one interoperable agent without waiting for Gemini or another platform to implement the extension.
@@ -90,44 +204,36 @@ Every AgentOrder message has `agentorder_version: "0.2.0"`. UCP and AP2 messages
 
 ### 4.1 RFQ
 
+<!-- agentorder-schema:rfq -->
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentorder.org/schemas/0.2/rfq.json",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["agentorder_version", "rfq_id", "print_job", "buyer", "fulfillment"],
   "properties": {
-    "agentorder_version": {"const": "0.2.0"},
-    "rfq_id": {"type": "string", "minLength": 1},
-    "buyer": {"$ref": "https://ucp.dev/schemas/shopping/types/buyer.json"},
-    "fulfillment": {"$ref": "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json"},
-    "print_job": {"$ref": "#/$defs/business_card"}
-  },
-  "$defs": {
-    "business_card": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["quantity", "finished_size", "sides", "colour", "stock", "artwork"],
-      "properties": {
-        "quantity": {"type": "integer", "minimum": 1, "maximum": 100000},
-        "finished_size": {"enum": ["us_3.5x2in", "uk_eu_85x55mm", "au_nz_90x55mm"]},
-        "sides": {"enum": [1, 2]},
-        "colour": {"enum": ["CMYK", "black"]},
-        "stock": {"type": "object", "additionalProperties": false, "required": ["weight_gsm"], "properties": {"weight_gsm": {"type": "integer", "minimum": 150, "maximum": 600}, "finish": {"enum": ["uncoated", "silk", "matte", "gloss"]}}},
-        "finishing": {"enum": ["none", "matte_laminate_both_sides"]},
-        "artwork": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["url"],
-          "properties": {
-            "url": {"type": "string", "format": "uri", "pattern": "^https://"},
-            "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
-          }
-        }
-      }
+    "agentorder_version": {
+      "const": "0.2.0"
+    },
+    "buyer": {
+      "$ref": "https://ucp.dev/schemas/shopping/types/buyer.json"
+    },
+    "fulfillment_destination": {
+      "$ref": "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json"
+    },
+    "print_job": {
+      "$ref": "#/$defs/print_job"
+    },
+    "rfq_id": {
+      "minLength": 1,
+      "type": "string"
     }
-  }
+  },
+  "required": [
+    "agentorder_version",
+    "rfq_id",
+    "buyer",
+    "fulfillment_destination",
+    "print_job"
+  ],
+  "type": "object"
 }
 ```
 
@@ -135,30 +241,126 @@ Every AgentOrder message has `agentorder_version: "0.2.0"`. UCP and AP2 messages
 
 ### 4.2 Quote
 
+<!-- agentorder-schema:quote -->
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentorder.org/schemas/0.2/quote.json",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["agentorder_version", "quote_id", "rfq_id", "status", "print_job"],
-  "properties": {
-    "agentorder_version": {"const": "0.2.0"},
-    "quote_id": {"type": "string", "minLength": 1},
-    "rfq_id": {"type": "string", "minLength": 1},
-    "status": {"enum": ["quoted", "declined"]},
-    "expires_at": {"type": "string", "format": "date-time"},
-    "print_job": {"$ref": "rfq.json#/$defs/business_card"},
-    "lead_time": {"type": "object", "additionalProperties": false, "required": ["business_days", "starts_after"], "properties": {"business_days": {"type": "integer", "minimum": 1}, "starts_after": {"const": "artwork_accepted"}}},
-    "review": {"type": "object", "additionalProperties": false, "required": ["url"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://"}}},
-    "quote_line_item": {"type": "object", "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json"},
-    "decline": {"type": "object", "additionalProperties": false, "required": ["reason"], "properties": {"reason": {"enum": ["price", "lead_time", "specification", "artwork", "other"]}}},
-    "declined_at": {"type": "string", "format": "date-time"}
-  },
   "allOf": [
-    {"if": {"properties": {"status": {"const": "quoted"}}}, "then": {"required": ["expires_at", "lead_time", "review", "quote_line_item"]}},
-    {"if": {"properties": {"status": {"const": "declined"}}}, "then": {"required": ["decline", "declined_at"]}}
-  ]
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "quoted"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "expires_at",
+          "lead_time",
+          "review",
+          "quote_line_item"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "declined"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "decline",
+          "declined_at"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "agentorder_version": {
+      "const": "0.2.0"
+    },
+    "decline": {
+      "$ref": "#/$defs/decline"
+    },
+    "declined_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "lead_time": {
+      "additionalProperties": false,
+      "properties": {
+        "business_days": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "starts_after": {
+          "const": "artwork_accepted"
+        }
+      },
+      "required": [
+        "business_days",
+        "starts_after"
+      ],
+      "type": "object"
+    },
+    "print_job": {
+      "$ref": "#/$defs/print_job"
+    },
+    "quote_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "quote_line_item": {
+      "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json",
+      "type": "object"
+    },
+    "review": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "format": "uri",
+          "pattern": "^https://",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "rfq_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "quoted",
+        "declined"
+      ]
+    }
+  },
+  "required": [
+    "agentorder_version",
+    "quote_id",
+    "rfq_id",
+    "status",
+    "print_job"
+  ],
+  "type": "object"
 }
 ```
 
@@ -166,19 +368,44 @@ A `quoted` response has a required fixed-price UCP line item, referenced to the 
 
 ### 4.3 Proof decision and production status
 
+<!-- agentorder-schema:status -->
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentorder.org/schemas/0.2/status.json",
-  "type": "object",
   "additionalProperties": false,
-  "required": ["agentorder_version", "quote_id", "proof_status", "production_status"],
   "properties": {
-    "agentorder_version": {"const": "0.2.0"},
-    "quote_id": {"type": "string"},
-    "proof_status": {"enum": ["not_required", "pending", "approved", "changes_requested"]},
-    "production_status": {"enum": ["awaiting_artwork", "artwork_review", "in_production", "dispatched", "completed", "on_hold"]}
-  }
+    "agentorder_version": {
+      "const": "0.2.0"
+    },
+    "production_status": {
+      "enum": [
+        "awaiting_artwork",
+        "artwork_review",
+        "in_production",
+        "dispatched",
+        "completed",
+        "on_hold"
+      ]
+    },
+    "proof_status": {
+      "enum": [
+        "not_required",
+        "pending",
+        "approved",
+        "changes_requested"
+      ]
+    },
+    "quote_id": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "agentorder_version",
+    "quote_id",
+    "proof_status",
+    "production_status"
+  ],
+  "type": "object"
 }
 ```
 
@@ -213,14 +440,64 @@ Use UCP profile JWKs and HTTP message signatures for service-to-service requests
 
 Every AgentOrder endpoint returns this envelope for an error. `agentorder_version` is mandatory; UCP and AP2 errors remain in their respective envelopes.
 
+<!-- agentorder-schema:error -->
 ```json
 {
-  "agentorder_version": "0.2.0",
-  "error": {
-    "code": "quote_expired",
-    "message": "This quote has expired; request a fresh quote.",
-    "details": []
-  }
+  "additionalProperties": false,
+  "properties": {
+    "agentorder_version": {
+      "const": "0.2.0"
+    },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_request",
+            "unsupported_print_job",
+            "quote_expired",
+            "idempotency_conflict",
+            "invalid_signature",
+            "invalid_csrf",
+            "mandate_required"
+          ]
+        },
+        "details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "message": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "details"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "agentorder_version",
+    "error"
+  ],
+  "type": "object"
 }
 ```
 
@@ -242,7 +519,7 @@ It does **not** define merchant identity, buyer, cart, line item, money, currenc
 
 ## 8. Deferred from v0.2
 
-Multi-item RFQs, multiple quotes, shipping pricing, customer-uploaded artwork, printer-side API integration, non-Stripe rails, autonomous/open mandates, cancellations/refunds, and ACP-specific endpoints are out of scope. ACP may be added as a transport adapter only if it can map to the same UCP Checkout and AP2 boundary without new AgentOrder fields.
+Multi-item RFQs, multiple quotes, shipping pricing, customer-uploaded artwork, printer-side API integration, non-Stripe rails, autonomous/open mandates, cancellations/refunds, and ACP-specific endpoints are out of scope. ACP may be added as a transport adapter only if it can map to the same UCP Checkout and AP2 boundary without new AgentOrder fields. **v0.3 option:** replace `quote_line_item` with a draft UCP Checkout so quote currency and full checkout context are carried in UCP before human review.
 
 ## References
 
