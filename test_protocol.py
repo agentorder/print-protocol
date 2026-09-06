@@ -1,6 +1,7 @@
 from __future__ import annotations
-import base64, json, secrets, tempfile, threading, time, unittest
+import asyncio, base64, json, secrets, tempfile, threading, time, unittest
 from pathlib import Path
+from unittest import mock
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
 from urllib.error import HTTPError
@@ -278,10 +279,11 @@ class AgentEndToEnd(unittest.TestCase):
         )
         app.store.platforms[agent.profile_url] = agent.platform_profile()
         job = RFQ["print_job"]
-        rfq, status, _ = agent.request_quote(
+        rfq, status, response = agent.request_quote(
             Tests.base, job, RFQ["buyer"], RFQ["fulfillment_destination"], "agent-e2e-001"
         )
         self.assertEqual(status, 202)
+        self.assertEqual(response["currency"], "NZD")
         quote = json.loads((Path(__file__).with_name("examples.json")).read_text())["quoted_quote"]
         quote["rfq_id"] = rfq["rfq_id"]
         with app.store.db() as db:
@@ -296,9 +298,9 @@ class AgentEndToEnd(unittest.TestCase):
                     "quoted",
                 ),
             )
-        self.assertEqual(
-            agent.get_quote(Tests.base, quote["quote_id"])["quote_id"], quote["quote_id"]
-        )
+        received_quote = agent.get_quote(Tests.base, quote["quote_id"])
+        self.assertEqual(received_quote["quote_id"], quote["quote_id"])
+        self.assertEqual(received_quote["currency"], "NZD")
         quote["quote_line_item"]["item"]["title"] = "tampered"
         with app.store.db() as db:
             db.execute(
@@ -343,3 +345,59 @@ class AgentEndToEnd(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "^quote_expired$"):
             agent.get_quote(Tests.base, quote["quote_id"])
+
+
+class DiscoveryHardening(unittest.TestCase):
+    def test_http_without_allow_insecure_is_rejected(self):
+        from reference_agent import Agent
+
+        with self.assertRaisesRegex(ValueError, "^invalid_profile$"):
+            Agent("https://agent.example.invalid/profile.json").discover_printer(
+                "http://127.0.0.1:8787/.well-known"
+            )
+
+    def test_oversized_profile_is_rejected(self):
+        from reference_agent import Agent, PROFILE_MAX_BYTES, PROFILE_TIMEOUT_SECONDS
+
+        with mock.patch("reference_agent.urlopen") as urlopen_mock:
+            urlopen_mock.return_value.__enter__.return_value.geturl.return_value = (
+                "https://printer.example.invalid/.well-known/ucp"
+            )
+            urlopen_mock.return_value.__enter__.return_value.read.return_value = b"x" * (
+                PROFILE_MAX_BYTES + 1
+            )
+            with self.assertRaisesRegex(ValueError, "^invalid_profile$"):
+                Agent("https://agent.example.invalid/profile.json").discover_printer(
+                    "https://printer.example.invalid/.well-known/ucp"
+                )
+        urlopen_mock.assert_called_once_with(
+            "https://printer.example.invalid/.well-known/ucp",
+            timeout=PROFILE_TIMEOUT_SECONDS,
+        )
+
+    def test_schema_invalid_profile_is_rejected(self):
+        from reference_agent import Agent
+
+        with mock.patch("reference_agent.urlopen") as urlopen_mock:
+            urlopen_mock.return_value.__enter__.return_value.geturl.return_value = (
+                "https://printer.example.invalid/.well-known/ucp"
+            )
+            urlopen_mock.return_value.__enter__.return_value.read.return_value = json.dumps(
+                {"ucp": {"version": "not-a-version", "services": {}, "payment_handlers": {}}}
+            ).encode()
+            with self.assertRaisesRegex(ValueError, "^invalid_profile$"):
+                Agent("https://agent.example.invalid/profile.json").discover_printer(
+                    "https://printer.example.invalid/.well-known/ucp"
+                )
+
+
+class McpServer(unittest.TestCase):
+    def test_tools_have_descriptions(self):
+        from mcp_server import mcp
+
+        tools = asyncio.run(mcp.list_tools())
+        self.assertEqual(len(tools), 3)
+        self.assertTrue(all(tool.description for tool in tools))
+        descriptions = {tool.name: tool.description for tool in tools}
+        self.assertIn("cannot approve, check out, or pay", descriptions["request_quote"])
+        self.assertIn("currency and expiry", descriptions["get_quote"])

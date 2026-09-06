@@ -14,12 +14,14 @@ def agent():
     return _agent
 
 
-@mcp.tool()
+@mcp.tool(description="Discover and validate a printer's UCP business profile.")
 def discover_printer(url: str) -> dict:
     return agent().discover_printer(url + "/.well-known")
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Submit an RFQ only; this tool cannot approve, check out, or pay for a print job."
+)
 def request_quote(
     printer_url: str, print_job: dict, buyer: dict, fulfillment_destination: dict
 ) -> dict:
@@ -30,9 +32,9 @@ def request_quote(
         fulfillment_destination,
         "mcp-" + __import__("secrets").token_urlsafe(12),
     )
-    return {"rfq": rfq, "status": status, "response": response}
+    return {"rfq": rfq, "status": status, "response": response, "currency": response["currency"]}
 
 
-@mcp.tool()
+@mcp.tool(description="Get a validated quote result, including its currency and expiry.")
 def get_quote(printer_url: str, quote_id: str) -> dict:
     return agent().get_quote(printer_url, quote_id)

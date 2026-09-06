@@ -20,6 +20,13 @@ QUOTE = Draft202012Validator(
     registry=ucp_registry(),
     format_checker=FormatChecker(),
 )
+BUSINESS_PROFILE = Draft202012Validator(
+    {"$ref": "https://ucp.dev/schemas/ucp.json#/$defs/business_schema"},
+    registry=ucp_registry(),
+    format_checker=FormatChecker(),
+)
+PROFILE_TIMEOUT_SECONDS = 10
+PROFILE_MAX_BYTES = 64 * 1024
 
 
 def b64(v):
@@ -31,7 +38,9 @@ class Agent:
         self.profile_url = profile_url
         self.key = private_key or ec.generate_private_key(ec.SECP256R1())
         self.clock = clock
+        self.allow_insecure = allow_insecure
         self.sent_rfqs = {}
+        self.printer_configs = {}
         n = self.key.public_key().public_numbers()
         self.jwk = {
             "kid": "agent-key",
@@ -56,8 +65,32 @@ class Agent:
         }
 
     def discover_printer(self, url):
-        with urlopen(url) as r:
-            return json.loads(r.read())
+        """Fetch and validate a printer's UCP business discovery profile."""
+        if not self._is_allowed_profile_url(url):
+            raise ValueError("invalid_profile")
+        try:
+            with urlopen(url, timeout=PROFILE_TIMEOUT_SECONDS) as response:
+                if not self._is_allowed_profile_url(response.geturl()):
+                    raise ValueError("profile redirect is not allowed")
+                raw = response.read(PROFILE_MAX_BYTES + 1)
+            if len(raw) > PROFILE_MAX_BYTES:
+                raise ValueError("profile response exceeds 64 KiB")
+            profile = json.loads(raw)
+            errors = list(BUSINESS_PROFILE.iter_errors(profile["ucp"]))
+            if errors:
+                raise ValueError("profile does not match the UCP business schema")
+            return profile
+        except Exception as error:
+            raise ValueError("invalid_profile") from error
+
+    def _is_allowed_profile_url(self, url):
+        """Return whether a discovery URL uses an allowed transport and host."""
+        parsed = urlsplit(url)
+        secure = parsed.scheme == "https" and parsed.hostname is not None
+        loopback_http = (
+            self.allow_insecure and parsed.scheme == "http" and parsed.hostname == "127.0.0.1"
+        )
+        return secure or loopback_http
 
     def _request(self, url, method="GET", body=None, key=None):
         raw = b"" if body is None else json.dumps(body, separators=(",", ":")).encode()
@@ -97,6 +130,7 @@ class Agent:
             raise ValueError("capability_not_negotiated")
         cap = next(c for c in caps if c["version"] == "2026-09-06")
         config = cap["config"]
+        self.printer_configs[printer_url] = config
         if not config_allows(print_job, config):
             raise ValueError("unsupported_print_job")
         rfq = {
@@ -110,6 +144,7 @@ class Agent:
         if status not in (200, 202):
             raise ValueError(out["error"]["code"])
         self.sent_rfqs[rfq["rfq_id"]] = rfq
+        out["currency"] = config["business_cards"]["currency"]
         return rfq, status, out
 
     def get_quote(self, printer_url, quote_id):
@@ -131,6 +166,7 @@ class Agent:
         if errors:
             raise ValueError("invalid_quote")
         validate_quote(out)
+        out["currency"] = self.printer_configs[printer_url]["business_cards"]["currency"]
         return out
 
 
