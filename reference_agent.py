@@ -1,7 +1,8 @@
 """Single-printer AgentOrder reference agent using the interim ES256 binding."""
 
 from __future__ import annotations
-import base64, json, secrets, time
+import base64, json, secrets, time, hashlib
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -30,6 +31,7 @@ class Agent:
         self.profile_url = profile_url
         self.key = private_key or ec.generate_private_key(ec.SECP256R1())
         self.clock = clock
+        self.sent_rfqs = {}
         n = self.key.public_key().public_numbers()
         self.jwk = {
             "kid": "agent-key",
@@ -93,12 +95,13 @@ class Agent:
         caps = profile["ucp"]["capabilities"].get("org.agentorder.shopping.print_quote", [])
         if not any(c["version"] == "2026-09-06" for c in caps):
             raise ValueError("capability_not_negotiated")
-        config = caps[0]["config"]
+        cap = next(c for c in caps if c["version"] == "2026-09-06")
+        config = cap["config"]
         if not config_allows(print_job, config):
             raise ValueError("unsupported_print_job")
         rfq = {
             "agentorder_version": "0.2.0",
-            "rfq_id": secrets.token_urlsafe(12),
+            "rfq_id": "rfq-" + hashlib.sha256(idempotency_key.encode()).hexdigest()[:16],
             "buyer": buyer,
             "fulfillment_destination": fulfillment_destination,
             "print_job": print_job,
@@ -106,12 +109,24 @@ class Agent:
         status, out = self._request(printer_url + "/rfqs", "POST", rfq, idempotency_key)
         if status not in (200, 202):
             raise ValueError(out["error"]["code"])
+        self.sent_rfqs[rfq["rfq_id"]] = rfq
         return rfq, status, out
 
     def get_quote(self, printer_url, quote_id):
         status, out = self._request(printer_url + "/quotes-" + quote_id)
         if status != 200:
             raise ValueError(out["error"]["code"])
+        if out["rfq_id"] not in self.sent_rfqs:
+            raise ValueError("rfq_mismatch")
+        if json.dumps(out["print_job"], sort_keys=True, separators=(",", ":")) != json.dumps(
+            self.sent_rfqs[out["rfq_id"]]["print_job"], sort_keys=True, separators=(",", ":")
+        ):
+            raise ValueError("print_job_mismatch")
+        if (
+            datetime.fromisoformat(out["expires_at"].replace("Z", "+00:00")).timestamp()
+            <= self.clock()
+        ):
+            raise ValueError("quote_expired")
         errors = list(QUOTE.iter_errors(out))
         if errors:
             raise ValueError("invalid_quote")
