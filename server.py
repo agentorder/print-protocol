@@ -1,7 +1,7 @@
 """Loopback-only AgentOrder v0.2 reference server; not hosted-product code."""
 
 from __future__ import annotations
-import base64, hashlib, json, secrets, sqlite3, time
+import base64, hashlib, hmac, json, secrets, sqlite3, time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -41,6 +41,105 @@ def b64d(v):
 
 def b64(v):
     return base64.urlsafe_b64encode(v).rstrip(b"=").decode()
+
+
+def checkout_hash(checkout_jwt):
+    """Return AP2's default SHA-256 identifier for a serialized checkout JWT."""
+    if not isinstance(checkout_jwt, str):
+        raise ValueError("checkout_jwt must be a string")
+    return b64(hashlib.sha256(checkout_jwt.encode()).digest())
+
+
+def checkout_payload(checkout):
+    """Return the JCS payload covered by a merchant checkout authorization."""
+    if not isinstance(checkout, dict):
+        raise ValueError("checkout must be an object")
+    body = dict(checkout)
+    body.pop("ap2", None)
+    return jcs_canonicalize(body)
+
+
+def build_checkout_jwt(checkout):
+    """Attach the checkout's Appendix F merchant signature to its JCS payload."""
+    try:
+        authorization = checkout["ap2"]["merchant_authorization"]
+        header, empty, signature = authorization.split(".")
+        if empty or not header or not signature:
+            raise ValueError
+    except (AttributeError, KeyError, ValueError):
+        raise ValueError("checkout requires a detached merchant authorization")
+    return header + "." + b64(checkout_payload(checkout)) + "." + signature
+
+
+def verify_checkout_jwt(token, merchant_jwk):
+    """Verify an attached ES256 checkout JWS against the merchant public JWK."""
+    try:
+        header, payload, signature = token.split(".")
+        decoded_header = json.loads(b64d(header))
+        if (
+            not isinstance(decoded_header, dict)
+            or decoded_header.get("alg") != "ES256"
+            or (merchant_jwk.get("kid") and decoded_header.get("kid") != merchant_jwk["kid"])
+        ):
+            return False
+        decoded_checkout = json.loads(b64d(payload))
+        if not isinstance(decoded_checkout, dict) or b64(checkout_payload(decoded_checkout)) != payload:
+            return False
+        raw_signature = b64d(signature)
+        if len(raw_signature) != 64:
+            return False
+        public = ec.EllipticCurvePublicNumbers(
+            int.from_bytes(b64d(merchant_jwk["x"]), "big"),
+            int.from_bytes(b64d(merchant_jwk["y"]), "big"),
+            ec.SECP256R1(),
+        ).public_key()
+        public.verify(
+            encode_dss_signature(
+                int.from_bytes(raw_signature[:32], "big"), int.from_bytes(raw_signature[32:], "big")
+            ),
+            header.encode() + b"." + payload.encode(),
+            ec.ECDSA(hashes.SHA256()),
+        )
+        return True
+    except (AttributeError, InvalidSignature, KeyError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def validate_closed_mandate_bindings(checkout_mandate, payment_mandate, amount, currency):
+    """Validate AP2 closed-mandate bindings after credential verification.
+
+    Signature, disclosure, expiry, and audience validation are deliberately owned by
+    the trusted credential verifier. This function checks the immutable payment
+    bindings that the merchant must use before initiating a charge.
+    """
+    if not isinstance(checkout_mandate, dict) or not isinstance(payment_mandate, dict):
+        raise Problem(422, "mandate_required", "Closed AP2 mandates are required.")
+    if checkout_mandate.get("vct") != "mandate.checkout.1":
+        raise Problem(422, "mandate_required", "A closed Checkout Mandate is required.")
+    if payment_mandate.get("vct") != "mandate.payment.1":
+        raise Problem(422, "mandate_required", "A closed Payment Mandate is required.")
+    checkout_jwt = checkout_mandate.get("checkout_jwt")
+    if not isinstance(checkout_jwt, str) or not checkout_jwt:
+        raise Problem(422, "mandate_required", "Checkout Mandate checkout_jwt is required.")
+    expected_hash = checkout_hash(checkout_jwt)
+    checkout_mandate_hash = checkout_mandate.get("checkout_hash")
+    if not isinstance(checkout_mandate_hash, str) or not hmac.compare_digest(
+        checkout_mandate_hash, expected_hash
+    ):
+        raise Problem(422, "mandate_required", "Checkout Mandate hash does not match checkout_jwt.")
+    transaction_id = payment_mandate.get("transaction_id")
+    if not isinstance(transaction_id, str) or not hmac.compare_digest(transaction_id, expected_hash):
+        raise Problem(422, "mandate_required", "Payment Mandate is not bound to checkout_jwt.")
+    payment_amount = payment_mandate.get("payment_amount")
+    if (
+        not isinstance(payment_amount, dict)
+        or isinstance(payment_amount.get("amount"), bool)
+        or not isinstance(payment_amount.get("amount"), int)
+        or payment_amount["amount"] != amount
+        or payment_amount.get("currency") != currency
+    ):
+        raise Problem(422, "mandate_required", "Payment Mandate amount does not match checkout.")
+    return expected_hash
 
 
 def stamp(t):

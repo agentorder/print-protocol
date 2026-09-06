@@ -16,7 +16,16 @@ import server
 from agentorder_title import render_title
 from jcs import jcs_canonicalize
 from schema_support import ucp_registry
-from server import b64, make_server, verify_merchant_authorization
+from server import (
+    Problem,
+    b64,
+    build_checkout_jwt,
+    checkout_hash,
+    make_server,
+    validate_closed_mandate_bindings,
+    verify_checkout_jwt,
+    verify_merchant_authorization,
+)
 from jsonschema import Draft202012Validator
 
 
@@ -183,12 +192,82 @@ class CheckoutTest(unittest.TestCase):
         checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
         self.assertFalse(verify_merchant_authorization(checkout, self.agent_jwk))
 
+    def test_attached_checkout_jwt_verifies_with_merchant_key(self):
+        checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
+        token = build_checkout_jwt(checkout)
+        self.assertEqual(token.count("."), 2)
+        self.assertTrue(verify_checkout_jwt(token, self.merchant_jwk))
+
+    def test_attached_checkout_jwt_rejects_payload_tampering_and_wrong_key(self):
+        checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
+        token = build_checkout_jwt(checkout)
+        header, payload, signature = token.split(".")
+        tampered_payload = b64(jcs_canonicalize({"not": "the signed checkout"}))
+        self.assertFalse(verify_checkout_jwt(header + "." + tampered_payload + "." + signature, self.merchant_jwk))
+        self.assertFalse(verify_checkout_jwt(token, self.agent_jwk))
+
     def test_checkout_from_expired_quote_is_refused(self):
         self._seed_quote("q2", "r2", "2020-01-01T00:00:00Z")
         with self.assertRaises(server.Problem) as caught:
             self.store.build_checkout("printer-a", PLATFORM, "q2")
         self.assertEqual(caught.exception.status, 410)
         self.assertEqual(caught.exception.body["error"]["code"], "quote_expired")
+
+
+class ClosedMandateBindingsTest(unittest.TestCase):
+    def setUp(self):
+        self.checkout_jwt = "merchant.signed.checkout"
+        self.checkout_hash = checkout_hash(self.checkout_jwt)
+        self.checkout_mandate = {
+            "vct": "mandate.checkout.1",
+            "checkout_jwt": self.checkout_jwt,
+            "checkout_hash": self.checkout_hash,
+        }
+        self.payment_mandate = {
+            "vct": "mandate.payment.1",
+            "transaction_id": self.checkout_hash,
+            "payment_amount": {"amount": 10900, "currency": "NZD"},
+        }
+
+    def assert_rejected(self, checkout=None, payment=None):
+        with self.assertRaises(Problem) as caught:
+            validate_closed_mandate_bindings(
+                checkout or self.checkout_mandate, payment or self.payment_mandate, 10900, "NZD"
+            )
+        self.assertEqual(caught.exception.status, 422)
+        self.assertEqual(caught.exception.body["error"]["code"], "mandate_required")
+
+    def test_accepts_closed_mandates_with_matching_bindings(self):
+        self.assertEqual(
+            validate_closed_mandate_bindings(
+                self.checkout_mandate, self.payment_mandate, 10900, "NZD"
+            ),
+            self.checkout_hash,
+        )
+
+    def test_rejects_open_mandate_variants(self):
+        checkout = copy.deepcopy(self.checkout_mandate)
+        checkout["vct"] = "mandate.checkout.open.1"
+        self.assert_rejected(checkout=checkout)
+        payment = copy.deepcopy(self.payment_mandate)
+        payment["vct"] = "mandate.payment.open.1"
+        self.assert_rejected(payment=payment)
+
+    def test_rejects_checkout_hash_or_transaction_binding_mismatch(self):
+        checkout = copy.deepcopy(self.checkout_mandate)
+        checkout["checkout_hash"] = "not-the-checkout-hash"
+        self.assert_rejected(checkout=checkout)
+        payment = copy.deepcopy(self.payment_mandate)
+        payment["transaction_id"] = "another-checkout"
+        self.assert_rejected(payment=payment)
+
+    def test_rejects_payment_amount_or_currency_mismatch(self):
+        payment = copy.deepcopy(self.payment_mandate)
+        payment["payment_amount"]["amount"] = 10901
+        self.assert_rejected(payment=payment)
+        payment = copy.deepcopy(self.payment_mandate)
+        payment["payment_amount"]["currency"] = "USD"
+        self.assert_rejected(payment=payment)
 
 
 if __name__ == "__main__":
