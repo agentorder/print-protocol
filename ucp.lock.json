@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/Universal-Commerce-Protocol/ucp",
+  "commit": "f878636e17164ff259492825e79b3564e993cfee",
+  "retrieved_at": "2026-09-06",
+  "canonical_ids": [
+    "https://ucp.dev/schemas/shopping/types/buyer.json",
+    "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json",
+    "https://ucp.dev/schemas/shopping/types/line_item.json"
+  ]
+}

@@ -1,109 +1,253 @@
-# AgentOrder Print Protocol — draft 0.1.0
+# AgentOrder Print Protocol — v0.2.0
 
-Status: experimental, print-only, single-product reference profile. This is not a finalized industry standard. Breaking changes before 1.0 require a new protocol version and an explicit migration note.
+**Status:** experimental. **Scope:** business cards only; one quote per RFQ; artwork by HTTPS URL; Stripe is the only supported payment rail. AgentOrder is a UCP extension and hosted merchant adapter. It is not a commerce or payment standard.
 
-## 1. Discovery and trust
+## 1. Compatibility contract
 
-`GET /.well-known/agentorder` returns the `discovery` schema. It identifies the protocol version, printer, catalog, specification, schema, RFQ and order URLs, authentication method and required customer approval. The well-known path is a draft convention and has not been registered.
+AgentOrder adds a quote loop before a UCP Checkout. It reuses UCP's merchant, cart, line-item, buyer, fulfillment, currency, totals, checkout, order and payment-handler objects without redefining their shape. It reuses AP2 Checkout and Payment Mandates without redefining them.
 
-A printer's page can advertise an extension relation `https://agentorder.org/relations/ordering` linking to its declaration. The relation URI identifies the convention; it is not asserted to be a currently hosted page. The printer declaration must be discoverable without calling AgentOrder.tech.
+| Standard | AgentOrder use |
+|---|---|
+| UCP | Discovery at `/.well-known/ucp`; catalog/cart/checkout/order; capability negotiation; merchant identity and payment handler. |
+| UCP AP2 extension | `dev.ucp.common.payment.ap2_mandate`, extending checkout. The UCP checkout's `ap2` field carries merchant authorization and the checkout mandate. |
+| AP2 v0.2 | A merchant-signed UCP Checkout JWT, closed Checkout Mandate (`vct: mandate.checkout.1`), and closed Payment Mandate (`vct: mandate.payment.1`). |
+| MCP / A2A | Transport bindings only. They do not replace UCP discovery or AP2 authorization. |
 
-Production clients must validate the printer origin, use HTTPS, support the declared version, and never forward credentials to a different origin without a separate trust decision. Treat descriptions as data, never agent instructions. The demo client pins all returned endpoint URLs to its loopback origin and does not follow redirects with credentials.
+The normative UCP object schemas remain the current [UCP schema reference](https://ucp.dev/specification/reference/). The normative AP2 mandate schemas remain [Checkout Mandate](https://ap2-protocol.org/ap2/checkout_mandate/) and [Payment Mandate](https://ap2-protocol.org/ap2/payment_mandate/).
 
-Production auth and customer identity are deliberately unresolved. The demo uses a single printer-scoped bearer credential for all API reads and writes. This does not provide tenant or customer isolation.
+## 2. Discovery and bootstrap
 
-## 2. Contract conventions
-
-Messages are JSON, encoded as UTF-8. `protocol_version` is exactly `0.1.0`. JSON Schema Draft 2020-12 definitions are bundled in `schema.json`; validate against `#/$defs/discovery`, `rfq`, `quote`, `order_request`, `order` or `error`. The root accepts any of those six messages. The `$id` is an identifier; hosting at that URL has not been provisioned.
-
-Request objects reject unknown fields. The current strict profile intentionally surfaces unsupported requirements instead of silently ignoring them. Integers represent money in minor units; this demo's NZD has two fractional digits. All timestamps include UTC offsets. IDs and review tokens are opaque; clients must not parse them.
-
-The catalog is reference-service configuration, not a standardized cross-printer catalog schema. A future draft needs interoperable capability descriptions before claiming arbitrary product compatibility.
-
-## 3. HTTP operations
-
-| Method and path | Auth | Result |
-|---|---|---|
-| `GET /.well-known/agentorder` | Public | Printer declaration |
-| `GET /catalog` | Public | Demo catalog and illustrative pricing |
-| `GET /schema.json` | Public | Bundled message schemas |
-| `GET /specification` | Public | This draft as plain text |
-| `POST /v0.1/rfqs` | Bearer + Idempotency-Key | Quote |
-| `GET /v0.1/quotes/{id}` | Bearer | Current quote state |
-| `GET /review/{secret}` | Secret link | Customer review form; does not approve |
-| `POST /review/{secret}` | Secret link + form CSRF | Approve/decline, then 303 redirect |
-| `POST /v0.1/orders` | Bearer + Idempotency-Key | Order acknowledgment |
-| `GET /v0.1/orders/{id}` | Bearer | Stored order acknowledgment |
-
-New successful API writes return 201 with `Location`. A same-key replay returns 200 and `Idempotency-Replayed: true`. Other API responses have `Content-Type: application/json`. Form submission uses `application/x-www-form-urlencoded`. No endpoint uploads or fetches artwork, charges a card, or releases production.
-
-## 4. RFQ
-
-An RFQ describes product, quantity, finished dimensions in millimetres, stock weight in gsm, stock finish, sides, colour, finishing, fulfilment and expected artwork metadata. `client_reference` is a caller reference, not an idempotency key.
-
-The reference profile supports business cards at 90 × 55 mm, 350 gsm silk, double-sided full colour; quantities 250, 500 or 1,000; no finishing or matte lamination on both sides; pickup. Artwork is expected as a two-page CMYK PDF with 3 mm bleed. `status: not_supplied` means the metadata describes the intended artwork. `metadata_only` still does not establish that any file exists or passed preflight.
-
-Unsupported options return 422 with field-level details. There is no substitution, arbitrary free-text option, unpriced shipping, or silent manual-review fallback. A future asynchronous RFQ extension can represent manual quoting explicitly.
-
-## 5. Quote and calculation
-
-A quote copies the accepted request and contains itemized amounts, subtotal, tax, total, currency, expiry, artwork requirements, production timing and the review URL. Product details, amounts and expiry are immutable. Changed requirements need a fresh RFQ, a fresh idempotency key and fresh customer approval.
-
-Demo base prices are 6,500 / 9,500 / 14,500 minor units for 250 / 500 / 1,000 cards. Matte lamination adds 2,500 minor units per job. Tax is a **synthetic configuration value**, not a determination of real tax liability: `(subtotal * tax_basis_points + 5000) // 10000` rounds half up to the nearest minor unit. Total equals subtotal plus tax. The default is 1,500 basis points. The 500-card unlaminated example totals 10,925 minor units.
-
-Quotes expire after 86,400 seconds. `production.business_days` is a duration starting only after the printer accepts artwork; it is not a promised delivery date. The demo does not evaluate weekends, holidays, capacity or dispatch deadlines.
-
-## 6. Approval and states
+A printer, or AgentOrder acting as its authorized hosted endpoint, publishes a UCP Business Discovery Profile at:
 
 ```text
-quoted ──customer approves──> approved ──agent submits──> ordered
-   │                            │
-   ├──customer declines──> rejected
-   └──expiry──> expired <────expiry
+https://{printer-domain}/.well-known/ucp
 ```
 
-Review GET requests never approve. The server stores decisions against the quote ID and its immutable contents. A decision is accepted only for an unexpired `quoted` quote. Repeating the same decision is harmless. Changing a recorded decision returns 409. Expired quotes return 410 when approval or a new order is attempted. Already ordered quotes do not expire retroactively.
+The profile declares the standard UCP shopping service, `dev.ucp.shopping.checkout`, `dev.ucp.common.payment.ap2_mandate`, and `org.agentorder.shopping.print_quote` version `2026-09-06`. The AgentOrder capability extends UCP shopping cart and checkout. Its schema and specification are published from `https://agentorder.org/`; its version date is independent of AgentOrder's semver message version.
 
-`expired` is computed on read for previously quoted or approved records. To know current state after a write replay, fetch `quote_url`: replay responses preserve their original snapshot and may still say `quoted` after subsequent approval or expiry.
+The hosted endpoint may serve the profile and transports for a printer that lacks an API. The printer remains merchant of record and the Stripe connected account remains the payee. The hosted service must be authorized to sign the merchant checkout response and publish the relevant public JWK in the profile.
 
-The demo's browser form uses a secret review link and a stored CSRF token. The credentialed API cannot set `approved` in an RFQ or order body. Nevertheless, anyone holding the review URL can visit and submit that form: this is a workflow demonstration, **not independently verified human approval**. A production implementation must use a separately authenticated customer identity and show the exact terms and amount being authorized.
-
-## 7. Order and idempotency
-
-The order request contains only `protocol_version` and `quote_id`. Price and options come from the approved stored quote; a caller cannot override the total. Approval alone does not create an order. Submission creates one acknowledgment with status `pending_artwork_review`. That status means no artwork acceptance or production start has occurred.
-
-`Idempotency-Key` is required on RFQ and order POSTs: 8–100 characters drawn from letters, digits, underscore, dot, colon and hyphen. The key scope is one operation in this single-printer database. Same operation/key and canonical JSON body return the original response. Reuse with a different body returns 409. Invalid requests do not reserve keys. Replays can succeed after quote expiry because they retrieve an existing result; they never authorize a new expired order.
-
-Database transactions and a unique order-per-quote constraint prevent duplicate orders even with concurrent submissions using different keys. Submitting an already ordered quote with a new key returns that existing order (201 in this reference implementation); callers must use `order_id`, not status code, to identify it. Records and keys persist for the life of the demo database. Production needs a stated retention policy and per-principal key scope.
-
-## 8. Error envelope
+Each printer declares accepted business-card values in the capability's UCP `config`; the reference client must read this before submitting an RFQ. Example capability declaration:
 
 ```json
-{"error":{"code":"approval_required","message":"The customer must approve this exact quote first.","details":[]}}
+{
+  "org.agentorder.shopping.print_quote": [{
+    "version": "2026-09-06",
+    "extends": ["dev.ucp.shopping.cart", "dev.ucp.shopping.checkout"],
+    "spec": "https://agentorder.org/specification/0.2",
+    "schema": "https://agentorder.org/schemas/0.2/print-quote.json",
+    "config": {
+      "business_cards": {
+        "finished_size_presets": ["us_3.5x2in"],
+        "sides": [1, 2],
+        "stock_gsm": [300, 350, 400],
+        "stock_finish": ["uncoated", "silk", "matte", "gloss"],
+        "quantity": {"minimum": 100, "maximum": 10000, "increment": 50},
+        "finishing": ["none", "matte_laminate_both_sides"]
+      }
+    }
+  }]
+}
 ```
 
-| HTTP | Typical codes |
+`config` is the printer's authoritative accepted-value declaration. The wire schema permits only the three named regional presets; custom sizes are out of scope for v0.2.
+
+### First capable agent
+
+The initial platform that declares the AgentOrder capability is the AgentOrder reference client: an MCP server with an A2A agent card. Its UCP platform profile advertises the same capability/version as the printer profile. That gives the pilot one interoperable agent without waiting for Gemini or another platform to implement the extension.
+
+UCP negotiation activates the capability only when both profiles declare the same version. A generic UCP agent that does not advertise it cannot initiate an RFQ; it may still use other UCP capabilities. This is an adoption constraint, not a protocol fallback. Upstream standardization of a quoted-product capability remains the route to generic UCP-agent support.
+
+## 3. Flow
+
+```text
+UCP platform profile                 Hosted printer endpoint / printer
+        | UCP capability negotiation             |
+        |--------------------------------------->|
+        | <---- active UCP + AgentOrder set -----|
+        |                                        |
+        | AgentOrder RFQ (signed; idem key)      |
+        |--------------------------------------->|
+        | <-------- one immutable quote ----------|
+        |                                        |
+        | UCP Checkout using quote line item      |
+        |--------------------------------------->|
+        | < merchant-signed Checkout -------------|
+        |                                        |
+        | human reviews exact Checkout            |
+        |--- trusted surface signs AP2 ---------->|
+        |                                        |
+        | AP2 mandates + payment credential       |
+        |--------------------------------------->|
+        | <---------- UCP order / receipts -------|
+```
+
+The quote does not charge, create a UCP order, or authorize payment. A fresh quote is required after expiry or any changed print requirement. The completed UCP Checkout is the sole payable representation of the accepted quote.
+
+## 4. AgentOrder-only messages
+
+Every AgentOrder message has `agentorder_version: "0.2.0"`. UCP and AP2 messages retain their own versioning and are passed in their canonical forms.
+
+### 4.1 RFQ
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentorder.org/schemas/0.2/rfq.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agentorder_version", "rfq_id", "print_job", "buyer", "fulfillment"],
+  "properties": {
+    "agentorder_version": {"const": "0.2.0"},
+    "rfq_id": {"type": "string", "minLength": 1},
+    "buyer": {"$ref": "https://ucp.dev/schemas/shopping/types/buyer.json"},
+    "fulfillment": {"$ref": "https://ucp.dev/schemas/shopping/types/fulfillment_destination.json"},
+    "print_job": {"$ref": "#/$defs/business_card"}
+  },
+  "$defs": {
+    "business_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quantity", "finished_size", "sides", "colour", "stock", "artwork"],
+      "properties": {
+        "quantity": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "finished_size": {"enum": ["us_3.5x2in", "uk_eu_85x55mm", "au_nz_90x55mm"]},
+        "sides": {"enum": [1, 2]},
+        "colour": {"enum": ["CMYK", "black"]},
+        "stock": {"type": "object", "additionalProperties": false, "required": ["weight_gsm"], "properties": {"weight_gsm": {"type": "integer", "minimum": 150, "maximum": 600}, "finish": {"enum": ["uncoated", "silk", "matte", "gloss"]}}},
+        "finishing": {"enum": ["none", "matte_laminate_both_sides"]},
+        "artwork": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url"],
+          "properties": {
+            "url": {"type": "string", "format": "uri", "pattern": "^https://"},
+            "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+`artwork.url` is a reference only. The server must not fetch arbitrary URLs during RFQ creation. A later authenticated artwork handoff obtains the file through a bounded, allow-listed transfer process.
+
+### 4.2 Quote
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentorder.org/schemas/0.2/quote.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agentorder_version", "quote_id", "rfq_id", "status", "print_job"],
+  "properties": {
+    "agentorder_version": {"const": "0.2.0"},
+    "quote_id": {"type": "string", "minLength": 1},
+    "rfq_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["quoted", "declined"]},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "print_job": {"$ref": "rfq.json#/$defs/business_card"},
+    "lead_time": {"type": "object", "additionalProperties": false, "required": ["business_days", "starts_after"], "properties": {"business_days": {"type": "integer", "minimum": 1}, "starts_after": {"const": "artwork_accepted"}}},
+    "review": {"type": "object", "additionalProperties": false, "required": ["url"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://"}}},
+    "quote_line_item": {"type": "object", "$ref": "https://ucp.dev/schemas/shopping/types/line_item.json"},
+    "decline": {"type": "object", "additionalProperties": false, "required": ["reason"], "properties": {"reason": {"enum": ["price", "lead_time", "specification", "artwork", "other"]}}},
+    "declined_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "quoted"}}}, "then": {"required": ["expires_at", "lead_time", "review", "quote_line_item"]}},
+    {"if": {"properties": {"status": {"const": "declined"}}}, "then": {"required": ["decline", "declined_at"]}}
+  ]
+}
+```
+
+A `quoted` response has a required fixed-price UCP line item, referenced to the frozen vendored UCP line-item schema at `ucp.lock.json`. Currency, price, tax, buyer, fulfillment destination, payment method, checkout totals and merchant identity exist only in their UCP objects. A `declined` response has no payable line item, lead time, review, or expiry; it records only the reason and time.
+
+### 4.3 Proof decision and production status
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentorder.org/schemas/0.2/status.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agentorder_version", "quote_id", "proof_status", "production_status"],
+  "properties": {
+    "agentorder_version": {"const": "0.2.0"},
+    "quote_id": {"type": "string"},
+    "proof_status": {"enum": ["not_required", "pending", "approved", "changes_requested"]},
+    "production_status": {"enum": ["awaiting_artwork", "artwork_review", "in_production", "dispatched", "completed", "on_hold"]}
+  }
+}
+```
+
+A quote review is the single purchase approval: the trusted surface renders the final UCP Checkout and the human signs the AP2 Checkout and Payment Mandates there. AgentOrder creates no separate approval record. A proof decision is a production-control decision only; it cannot authorize payment.
+
+## 5. UCP and AP2 boundary
+
+For an unexpired quote, the hosted endpoint creates a UCP Checkout whose line item represents that quote before requesting human review. The checkout must include the quote's final amount, merchant/payee, policies, fulfillment selection, and expiry using UCP fields. It must be merchant-signed according to the negotiated UCP AP2 extension.
+
+The shopping agent presents that exact Checkout to a trusted surface. That review is the sole human purchase approval. A charge requires:
+
+1. a closed AP2 Checkout Mandate with `vct: "mandate.checkout.1"`, containing the merchant-signed Checkout JWT and its hash;
+2. a closed AP2 Payment Mandate with `vct: "mandate.payment.1"`, bound to that checkout hash; and
+3. a payment credential scoped to the approved payment mandate.
+
+The hosted endpoint verifies the Checkout Mandate itself, then creates a standard Stripe Connect charge for the printer's connected account. Stripe is not asked to verify AP2. The endpoint records the mandate hashes, UCP Checkout Receipt, Stripe payment identifier, and payment receipt against the resulting UCP order. No AgentOrder endpoint accepts a caller-supplied approval flag, payment amount, merchant, or payment token as a substitute.
+
+## 6. Transport and security
+
+| Operation | Requirement |
 |---|---|
-| 400 | `malformed_body`, `invalid_idempotency_key`, `invalid_host`, `invalid_form` |
-| 401 | `unauthorized` |
-| 403 | `invalid_csrf`, `invalid_origin` |
-| 404 | `not_found` |
-| 409 | `idempotency_conflict`, `approval_required`, `decision_locked` |
-| 410 | `quote_expired` |
-| 411 | `length_required` |
-| 413 | `body_too_large` |
-| 415 | `unsupported_media_type` |
-| 422 | `invalid_request`, `unsupported_options` |
-| 500 | `internal_error` |
+| RFQ submission | Signed request, negotiated UCP capability, and `Idempotency-Key`. |
+| Quote response | Immutable quote, expiry, UCP active-capability metadata, and signed response where the negotiated UCP binding requires it. |
+| Review | Separately authenticated human session; CSRF token; exact quote, total, expiry, artwork/proof state shown before decision. Review URL alone is insufficient. |
+| Checkout completion | UCP/AP2 mandate verification, idempotency key, and Stripe credential only after valid mandate. |
+| Artwork | HTTPS URL only in v0.2. No public fetch, direct upload, or arbitrary redirect following. |
+| Hosted tenancy | Per-printer keys, Stripe account binding, idempotency scope, audit records, and authorization boundary. |
 
-The reference handler implements GET and POST only; unsupported HTTP verbs receive the standard server's 501 response, outside this JSON envelope. Bodies are limited to 32 KiB. Duplicate JSON keys, non-finite numbers and malformed JSON are rejected. SQL uses parameter binding. Review text is escaped; secret links are not access-logged, cached, embedded in third-party assets or sent in referrers.
+Use UCP profile JWKs and HTTP message signatures for service-to-service requests. Reject stale timestamps, invalid signatures, replayed request identifiers, cross-tenant identifiers, unknown fields, and changed bodies for an existing idempotency key. Do not place review tokens in logs, referrers, analytics, or third-party assets.
 
-## 9. Next decisions
+### Error response
 
-Customer identity and delegated-agent authorization; signed approval receipts; artwork transfer, preflight and proof acceptance; delivery addresses and shipping prices; printer acceptance/cancellation; asynchronous/manual quotes; payment provider integration; taxes; production SLAs; privacy and retention; service operation and abuse controls. None is represented as implemented in 0.1.0.
+Every AgentOrder endpoint returns this envelope for an error. `agentorder_version` is mandatory; UCP and AP2 errors remain in their respective envelopes.
+
+```json
+{
+  "agentorder_version": "0.2.0",
+  "error": {
+    "code": "quote_expired",
+    "message": "This quote has expired; request a fresh quote.",
+    "details": []
+  }
+}
+```
+
+`code` is one of `invalid_request`, `unsupported_print_job`, `quote_expired`, `idempotency_conflict`, `invalid_signature`, `invalid_csrf`, or `mandate_required`. A buyer decline is a normal quote status, never an error. `details` is an array and may be empty. HTTP status is 400, 401, 403, 409, 410, or 422 as appropriate.
+
+## 7. Explicit AgentOrder-only surface
+
+AgentOrder defines only:
+
+- business-card print specification;
+- RFQ identity and quote identity;
+- quote validity;
+- lead time beginning after artwork acceptance;
+- artwork URL and checksum reference;
+- proof decision;
+- production status.
+
+It does **not** define merchant identity, buyer, cart, line item, money, currency, tax, delivery address, fulfillment selection, checkout, order, payment method, payment credential, mandate, or receipt.
+
+## 8. Deferred from v0.2
+
+Multi-item RFQs, multiple quotes, shipping pricing, customer-uploaded artwork, printer-side API integration, non-Stripe rails, autonomous/open mandates, cancellations/refunds, and ACP-specific endpoints are out of scope. ACP may be added as a transport adapter only if it can map to the same UCP Checkout and AP2 boundary without new AgentOrder fields.
 
 ## References
 
-- [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/json-schema-core) — the schema dialect used here.
-- [Python sqlite3](https://docs.python.org/3/library/sqlite3.html) — reference persistence API.
-- [Python http.server](https://docs.python.org/3/library/http.server.html) — local demonstration HTTP server; not suitable for production deployment.
+- [UCP core concepts and discovery](https://github.com/Universal-Commerce-Protocol/ucp/blob/main/docs/documentation/core-concepts.md)
+- [UCP schema reference](https://ucp.dev/specification/reference/)
+- [AP2 v0.2 specification](https://ap2-protocol.org/ap2/specification/)
+- [AP2 Checkout Mandate](https://ap2-protocol.org/ap2/checkout_mandate/)
+- [AP2 Payment Mandate](https://ap2-protocol.org/ap2/payment_mandate/)
