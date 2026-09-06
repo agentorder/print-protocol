@@ -1,0 +1,29 @@
+name: Print-ordering use case
+description: Describe an interoperability need for the protocol.
+title: "use case: "
+labels: [use-case]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include customer information, artwork, pricing agreements, credentials, or real order data.
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Print-ordering scenario
+      description: What does the customer, agent, and printer need to achieve?
+    validations:
+      required: true
+  - type: textarea
+    id: gap
+    attributes:
+      label: Current protocol gap
+      description: Which existing message or state is insufficient?
+    validations:
+      required: true
+  - type: textarea
+    id: interoperability
+    attributes:
+      label: Independent implementation
+      description: How could a printer and agent implement this without an AgentOrder-hosted service?
+    validations:
+      required: true

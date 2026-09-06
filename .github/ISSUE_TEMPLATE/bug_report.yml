@@ -1,0 +1,34 @@
+name: Protocol or reference implementation defect
+description: Report a reproducible problem using dummy data only.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include customer data, artwork, review URLs, credentials, payment information, or production order details. Use a private report for security vulnerabilities.
+  - type: textarea
+    id: situation
+    attributes:
+      label: What were you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction using dummy data
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Protocol or commit version
+      placeholder: "0.1.0"
+    validations:
+      required: true

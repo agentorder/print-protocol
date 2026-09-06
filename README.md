@@ -60,6 +60,8 @@ SQLite stores quotes, decisions, orders and retry keys in `agentorder-demo.sqlit
 | [demo.py](demo.py) | Agent-style client for the complete journey |
 | [test_protocol.py](test_protocol.py) | Contract, HTTP and ordering integrity tests |
 | [GOVERNANCE.md](GOVERNANCE.md) | Early-stage stewardship and public contribution process |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution and local-validation guidance |
+| [SECURITY.md](SECURITY.md) | Private-reporting guidance and demo security boundaries |
 
 ## Verify
 
@@ -93,3 +95,7 @@ The review link is a secret capability. Anyone with it, including software, can 
 `AgentOrder.org` is the intended open-project home. `AgentOrder.tech` is the intended hosted-product home. This repository does not deploy either domain. The project currently has founder stewardship; independent governance has not yet been established. See [GOVERNANCE.md](GOVERNANCE.md).
 
 The draft specification, examples and implementation are available under the [MIT License](LICENSE). This license does not grant rights to the AgentOrder name or marks.
+
+## Participate
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Use issues for reproducible defects and concrete interoperability needs. Keep customer data, artwork, quote-review links, credentials and real order details out of public channels. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
