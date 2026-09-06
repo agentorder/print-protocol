@@ -55,7 +55,7 @@ RFQ = {
         "colour": "CMYK",
         "stock": {"weight_gsm": 350, "finish": "silk"},
         "finishing": "none",
-        "artwork": {"url": "https://files.example.invalid/a.pdf"},
+        "artwork": {"url": "https://files.example.invalid/artwork/example-001.pdf"},
     },
 }
 
@@ -305,4 +305,41 @@ class AgentEndToEnd(unittest.TestCase):
                 "UPDATE quotes SET body=? WHERE id=?", (json.dumps(quote), quote["quote_id"])
             )
         with self.assertRaises(ValueError):
+            agent.get_quote(Tests.base, quote["quote_id"])
+
+    def test_agent_rejects_expired_quote(self):
+        from reference_agent import Agent
+
+        app = Tests.app
+        agent = Agent(
+            "https://agent.example.invalid/profile.json",
+            clock=lambda: Tests.now[0],
+            allow_insecure=True,
+        )
+        app.store.platforms[agent.profile_url] = agent.platform_profile()
+        rfq, status, _ = agent.request_quote(
+            Tests.base,
+            RFQ["print_job"],
+            RFQ["buyer"],
+            RFQ["fulfillment_destination"],
+            "agent-expired-001",
+        )
+        self.assertEqual(status, 202)
+        quote = json.loads((Path(__file__).with_name("examples.json")).read_text())["quoted_quote"]
+        quote["quote_id"] = "quote-expired-001"
+        quote["rfq_id"] = rfq["rfq_id"]
+        quote["expires_at"] = "1970-01-01T00:00:00Z"
+        with app.store.db() as db:
+            db.execute(
+                "INSERT INTO quotes VALUES(?,?,?,?,?,?)",
+                (
+                    quote["quote_id"],
+                    "printer-a",
+                    agent.profile_url,
+                    quote["rfq_id"],
+                    json.dumps(quote),
+                    "quoted",
+                ),
+            )
+        with self.assertRaisesRegex(ValueError, "^quote_expired$"):
             agent.get_quote(Tests.base, quote["quote_id"])
