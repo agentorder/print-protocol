@@ -256,3 +256,53 @@ class Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgentEndToEnd(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        Tests.setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        Tests.tearDownClass()
+
+    def test_agent_receives_and_validates_quote(self):
+        from reference_agent import Agent
+
+        app = Tests.app
+        agent = Agent(
+            "https://agent.example.invalid/profile.json",
+            clock=lambda: Tests.now[0],
+            allow_insecure=True,
+        )
+        app.store.platforms[agent.profile_url] = agent.platform_profile()
+        job = RFQ["print_job"]
+        rfq, status, _ = agent.request_quote(
+            Tests.base, job, RFQ["buyer"], RFQ["fulfillment_destination"], "agent-e2e-001"
+        )
+        self.assertEqual(status, 202)
+        quote = json.loads((Path(__file__).with_name("examples.json")).read_text())["quoted_quote"]
+        quote["rfq_id"] = rfq["rfq_id"]
+        with app.store.db() as db:
+            db.execute(
+                "INSERT INTO quotes VALUES(?,?,?,?,?,?)",
+                (
+                    quote["quote_id"],
+                    "printer-a",
+                    agent.profile_url,
+                    quote["rfq_id"],
+                    json.dumps(quote),
+                    "quoted",
+                ),
+            )
+        self.assertEqual(
+            agent.get_quote(Tests.base, quote["quote_id"])["quote_id"], quote["quote_id"]
+        )
+        quote["quote_line_item"]["item"]["title"] = "tampered"
+        with app.store.db() as db:
+            db.execute(
+                "UPDATE quotes SET body=? WHERE id=?", (json.dumps(quote), quote["quote_id"])
+            )
+        with self.assertRaises(ValueError):
+            agent.get_quote(Tests.base, quote["quote_id"])

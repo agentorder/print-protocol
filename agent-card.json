@@ -1,0 +1,1 @@
+{"name":"AgentOrder Reference Agent","version":"0.2.0","capabilities":{"org.agentorder.shopping.print_quote":[{"version":"2026-09-06","spec":"https://agentorder.org/specification/0.2","schema":"https://agentorder.org/schemas/0.2/schema.json"}]}}
