@@ -18,6 +18,7 @@ from jcs import jcs_canonicalize
 from schema_support import ucp_registry
 from server import (
     Problem,
+    FakeStripeAdapter,
     b64,
     build_checkout_jwt,
     checkout_hash,
@@ -251,6 +252,34 @@ class CheckoutTest(unittest.TestCase):
             ),
             checkout_hash(build_checkout_jwt(checkout)),
         )
+
+    def test_charge_quote_uses_verified_checkout_total_and_is_idempotent(self):
+        checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
+        mandates = mint_trusted_surface_mandates(checkout, self.trusted_surface)
+        adapter = FakeStripeAdapter()
+        result = self.store.charge_quote(
+            "printer-a", PLATFORM, "q1", mandates, self.trusted_surface_jwk, adapter
+        )
+        again = self.store.charge_quote(
+            "printer-a", PLATFORM, "q1", mandates, self.trusted_surface_jwk, adapter
+        )
+        self.assertEqual(result, again)
+        self.assertEqual(result["amount"], 10900)
+        self.assertEqual(result["currency"], "NZD")
+        with self.store.db() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM payments").fetchone()[0], 1)
+
+    def test_charge_quote_refuses_mandates_for_a_different_checkout(self):
+        checkout = self.store.build_checkout("printer-a", PLATFORM, "q1")
+        mandates = mint_trusted_surface_mandates(checkout, self.trusted_surface)
+        self._seed_quote("q2", "r2", "2099-01-01T00:00:00Z")
+        with self.assertRaises(Problem) as caught:
+            self.store.charge_quote(
+                "printer-a", PLATFORM, "q2", mandates, self.trusted_surface_jwk, FakeStripeAdapter()
+            )
+        self.assertEqual(caught.exception.body["error"]["code"], "mandate_scope_mismatch")
+        with self.store.db() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM payments").fetchone()[0], 0)
 
     def test_checkout_from_expired_quote_is_refused(self):
         self._seed_quote("q2", "r2", "2020-01-01T00:00:00Z")

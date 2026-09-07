@@ -305,8 +305,25 @@ def validate(kind, body):
 
 
 MIGRATIONS = [
-    """CREATE TABLE IF NOT EXISTS printers(id TEXT PRIMARY KEY,name TEXT NOT NULL,config TEXT NOT NULL,signing_key TEXT NOT NULL);CREATE TABLE IF NOT EXISTS printer_capabilities(printer_id TEXT PRIMARY KEY,body TEXT NOT NULL);CREATE TABLE IF NOT EXISTS signing_keys(printer_id TEXT PRIMARY KEY,kid TEXT NOT NULL,public_jwk TEXT NOT NULL);CREATE TABLE IF NOT EXISTS rfqs(id TEXT NOT NULL,printer_id TEXT NOT NULL,platform TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(printer_id,platform,id));CREATE TABLE IF NOT EXISTS quotes(id TEXT PRIMARY KEY,printer_id TEXT NOT NULL,platform TEXT NOT NULL,rfq_id TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL);CREATE TABLE IF NOT EXISTS idempotency_keys(printer_id TEXT NOT NULL,platform TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(printer_id,platform,key));CREATE TABLE IF NOT EXISTS nonces(platform TEXT NOT NULL,nonce TEXT NOT NULL,ts INTEGER NOT NULL,PRIMARY KEY(platform,nonce));"""
+    """CREATE TABLE IF NOT EXISTS printers(id TEXT PRIMARY KEY,name TEXT NOT NULL,config TEXT NOT NULL,signing_key TEXT NOT NULL);CREATE TABLE IF NOT EXISTS printer_capabilities(printer_id TEXT PRIMARY KEY,body TEXT NOT NULL);CREATE TABLE IF NOT EXISTS signing_keys(printer_id TEXT PRIMARY KEY,kid TEXT NOT NULL,public_jwk TEXT NOT NULL);CREATE TABLE IF NOT EXISTS rfqs(id TEXT NOT NULL,printer_id TEXT NOT NULL,platform TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(printer_id,platform,id));CREATE TABLE IF NOT EXISTS quotes(id TEXT PRIMARY KEY,printer_id TEXT NOT NULL,platform TEXT NOT NULL,rfq_id TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL);CREATE TABLE IF NOT EXISTS idempotency_keys(printer_id TEXT NOT NULL,platform TEXT NOT NULL,key TEXT NOT NULL,fingerprint TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(printer_id,platform,key));CREATE TABLE IF NOT EXISTS nonces(platform TEXT NOT NULL,nonce TEXT NOT NULL,ts INTEGER NOT NULL,PRIMARY KEY(platform,nonce));""",
+    """CREATE TABLE IF NOT EXISTS payments(checkout_hash TEXT PRIMARY KEY,printer_id TEXT NOT NULL,result TEXT NOT NULL);""",
 ]
+
+
+class FakeStripeAdapter:
+    """Deterministic local stand-in for a Stripe Connect payment adapter."""
+
+    def create_payment(self, printer_account, amount_minor, currency, idempotency_key):
+        fingerprint = hashlib.sha256(
+            canon([printer_account, amount_minor, currency, idempotency_key]).encode()
+        ).hexdigest()
+        return {
+            "id": "fakepay_" + fingerprint[:24],
+            "status": "succeeded",
+            "amount": amount_minor,
+            "currency": currency,
+            "printer_account": printer_account,
+        }
 
 
 class Store:
@@ -531,6 +548,36 @@ class Store:
             + b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
         }
         return checkout
+
+    def merchant_jwk(self, pid):
+        self.printer(pid)
+        with self.db() as d:
+            key = d.execute(
+                "SELECT public_jwk FROM signing_keys WHERE printer_id=?", (pid,)
+            ).fetchone()
+        if not key:
+            raise Problem(500, "invalid_request", "Merchant signing key unavailable.")
+        return json.loads(key["public_jwk"])
+
+    def charge_quote(self, pid, platform, qid, mandates, trusted_surface_jwk, adapter):
+        """Charge a quote only after the AP2 mandate pair authorizes its checkout."""
+        checkout = self.build_checkout(pid, platform, qid)
+        checkout_identifier = verify_mandate_pair(
+            checkout, mandates, self.merchant_jwk(pid), trusted_surface_jwk
+        )
+        amount, currency = checkout_total(checkout)
+        with self.db() as d:
+            d.execute("BEGIN IMMEDIATE")
+            recorded = d.execute(
+                "SELECT result FROM payments WHERE checkout_hash=?", (checkout_identifier,)
+            ).fetchone()
+            if recorded:
+                return json.loads(recorded["result"])
+            result = adapter.create_payment(pid, amount, currency, checkout_identifier)
+            d.execute(
+                "INSERT INTO payments VALUES(?,?,?)", (checkout_identifier, pid, canon(result))
+            )
+        return result
 
 
 def verify_merchant_authorization(checkout, jwk):
